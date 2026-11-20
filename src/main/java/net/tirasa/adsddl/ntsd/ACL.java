@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import net.tirasa.adsddl.ntsd.data.AceFlag;
 import net.tirasa.adsddl.ntsd.data.AceType;
 import net.tirasa.adsddl.ntsd.data.AclRevision;
@@ -297,6 +298,65 @@ public class ACL {
         }
         aces.add(insertIndex, ace);
         return this;
+    }
+
+    /**
+     * Finds all ACEs in this ACL matching the given predicate.
+     *
+     * @param filter predicate filter.
+     * @return list of matching ACEs.
+     */
+    public List<ACE> findAces(final Predicate<ACE> filter) {
+        final List<ACE> res = new ArrayList<>();
+        if (filter == null) {
+            return res;
+        }
+        for (int i = 0, n = aces.size(); i < n; i++) {
+            final ACE ace = aces.get(i);
+            if (filter.test(ace)) {
+                res.add(ace);
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Finds the first ACE in this ACL matching the given predicate, or {@code null} if none matches.
+     *
+     * @param filter predicate filter.
+     * @return first matching ACE or null.
+     */
+    public ACE findFirstAce(final Predicate<ACE> filter) {
+        if (filter == null) {
+            return null;
+        }
+        for (int i = 0, n = aces.size(); i < n; i++) {
+            final ACE ace = aces.get(i);
+            if (filter.test(ace)) {
+                return ace;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Removes all ACEs matching the given predicate from this ACL.
+     *
+     * @param filter predicate filter.
+     * @return number of removed ACEs.
+     */
+    public int removeAces(final Predicate<ACE> filter) {
+        if (filter == null) {
+            return 0;
+        }
+        int removed = 0;
+        for (int i = 0; i < aces.size(); i++) {
+            if (filter.test(aces.get(i))) {
+                aces.remove(i--);
+                removed++;
+            }
+        }
+        return removed;
     }
 
     /**
