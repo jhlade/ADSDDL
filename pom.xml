@@ -233,6 +233,7 @@
                 <exclude>.idea/**</exclude>
                 <exclude>**/*.bin</exclude>
                 <exclude>**/.*</exclude>
+                <exclude>**/cz/jhlade/**</exclude>
               </excludes>
             </licenseSet>
           </licenseSets>

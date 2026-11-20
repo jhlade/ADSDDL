@@ -15,9 +15,12 @@
  */
 package net.tirasa.adsddl.ntsd.controls;
 
+import cz.jhlade.adsddl.controls.BerCodec;
+import cz.jhlade.adsddl.controls.DirSyncResponse;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import javax.naming.ldap.BasicControl;
+import javax.naming.ldap.Control;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 
 /**
@@ -81,31 +84,46 @@ public class DirSyncControl extends BasicControl {
     /**
      * BER encode the cookie value.
      *
-     * @param cookie cookie value to be encoded.
      * @return ber encoded cookie value.
      */
     private byte[] berEncodedValue() {
-        final byte[] cookieSize = NumberFacility.leftTrim(NumberFacility.getBytes(cookie.length));
-        final byte[] size = NumberFacility.leftTrim(NumberFacility.getBytes(14 + cookieSize.length + cookie.length));
+        if (cookie.length < 0x80) {
+            // Preserve legacy 2-byte (0x81 len) length encoding for backward compatibility with existing tests,
+            // while supporting arbitrary BER lengths for larger cookies via BerCodec.
+            final byte[] cookieSize = NumberFacility.leftTrim(NumberFacility.getBytes(cookie.length));
+            final byte[] size = NumberFacility.leftTrim(NumberFacility.getBytes(14 + cookieSize.length + cookie.length));
 
-        final ByteBuffer buff = ByteBuffer.allocate(1 + 1 + size.length + 14 + cookieSize.length + cookie.length);
+            final ByteBuffer buff = ByteBuffer.allocate(1 + 1 + size.length + 14 + cookieSize.length + cookie.length);
 
-        buff.put((byte) 0x30); // (Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
-        buff.put((byte) (size.length == 1 ? 0x81 : size.length == 2 ? 0x82 : 0x83)); // size type (short or long form)
-        buff.put(size); // sequence size
-        buff.put((byte) 0x02); // 4bytes int tag
-        buff.put((byte) 0x04); // int size
-        buff.putInt(flags); // flags
-        buff.put((byte) 0x02); // 4bytes int tag
-        buff.put((byte) 0x04); // int size
-        buff.putInt(Integer.MAX_VALUE); // max attribute count
-        buff.put((byte) 0x04); // byte array tag
-        buff.put((byte) (cookieSize.length == 1 ? 0x81 : cookieSize.length == 2 ? 0x82 : 0x83)); // short or long form
-        buff.put(cookieSize); // byte array size
-        if (cookie.length > 0) {
-            buff.put(cookie); // (cookie, Ber.ASN_OCTET_STR);
+            buff.put((byte) 0x30); // (Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
+            buff.put((byte) (size.length == 1 ? 0x81 : size.length == 2 ? 0x82 : 0x83)); // size type (short or long form)
+            buff.put(size); // sequence size
+            buff.put((byte) 0x02); // 4bytes int tag
+            buff.put((byte) 0x04); // int size
+            buff.putInt(flags); // flags
+            buff.put((byte) 0x02); // 4bytes int tag
+            buff.put((byte) 0x04); // int size
+            buff.putInt(Integer.MAX_VALUE); // max attribute count
+            buff.put((byte) 0x04); // byte array tag
+            buff.put((byte) (cookieSize.length == 1 ? 0x81 : cookieSize.length == 2 ? 0x82 : 0x83)); // short or long form
+            buff.put(cookieSize); // byte array size
+            if (cookie.length > 0) {
+                buff.put(cookie); // (cookie, Ber.ASN_OCTET_STR);
+            }
+            return buff.array();
         }
-        return buff.array();
+        return BerCodec.encodeIntIntOctetStringSequence(flags, Integer.MAX_VALUE, cookie, true);
+    }
+
+    /**
+     * Parses the full {@link DirSyncResponse} (including {@code hasMoreResults()} and {@code getCookie()})
+     * from the LDAP response controls returned by the server.
+     *
+     * @param controls response controls from {@code LdapContext.getResponseControls()}.
+     * @return decoded {@link DirSyncResponse}, or {@code null} if no DirSync response control was present.
+     */
+    public static DirSyncResponse parseResponse(final Control[] controls) {
+        return DirSyncResponse.fromResponseControls(controls);
     }
 
     /**
@@ -115,16 +133,9 @@ public class DirSyncControl extends BasicControl {
      * @param controls response controls from {@code LdapContext.getResponseControls()}.
      * @return extracted sync cookie, or {@code null} if no DirSync response control was present.
      */
-    public static byte[] parseResponseCookie(final javax.naming.ldap.Control[] controls) {
-        if (controls == null) {
-            return null;
-        }
-        for (javax.naming.ldap.Control control : controls) {
-            if (control != null && OID.equals(control.getID())) {
-                return extractCookieFromBer(control.getEncodedValue());
-            }
-        }
-        return null;
+    public static byte[] parseResponseCookie(final Control[] controls) {
+        final DirSyncResponse response = DirSyncResponse.fromResponseControls(controls);
+        return response == null ? null : response.getCookie();
     }
 
     /**
@@ -135,58 +146,11 @@ public class DirSyncControl extends BasicControl {
      * @return cookie byte array, or empty byte array if absent/malformed.
      */
     public static byte[] extractCookieFromBer(final byte[] ber) {
-        if (ber == null || ber.length < 2 || ber[0] != 0x30) {
+        try {
+            return DirSyncResponse.decode(ber).getCookie();
+        } catch (IllegalArgumentException e) {
             return EMPTY_COOKIE;
         }
-        int pos = 1;
-        pos += berLengthFieldBytes(ber, pos);
-        // Skip first INTEGER (flag / moreResults)
-        pos = skipBerElement(ber, pos);
-        // Skip second INTEGER (maxReturnLength / unused)
-        pos = skipBerElement(ber, pos);
-        if (pos >= ber.length || ber[pos] != 0x04) {
-            return EMPTY_COOKIE;
-        }
-        pos++;
-        final int cookieLen = readBerLength(ber, pos);
-        pos += berLengthFieldBytes(ber, pos);
-        if (cookieLen <= 0 || pos + cookieLen > ber.length) {
-            return EMPTY_COOKIE;
-        }
-        return Arrays.copyOfRange(ber, pos, pos + cookieLen);
-    }
-
-    private static int berLengthFieldBytes(final byte[] ber, final int pos) {
-        if (pos >= ber.length) {
-            return 0;
-        }
-        final int b = ber[pos] & 0xFF;
-        return (b & 0x80) == 0 ? 1 : 1 + (b & 0x7F);
-    }
-
-    private static int readBerLength(final byte[] ber, final int pos) {
-        if (pos >= ber.length) {
-            return 0;
-        }
-        final int b = ber[pos] & 0xFF;
-        if ((b & 0x80) == 0) {
-            return b;
-        }
-        final int count = b & 0x7F;
-        int len = 0;
-        for (int i = 1; i <= count && pos + i < ber.length; i++) {
-            len = (len << 8) | (ber[pos + i] & 0xFF);
-        }
-        return len;
-    }
-
-    private static int skipBerElement(final byte[] ber, final int pos) {
-        if (pos >= ber.length) {
-            return ber.length;
-        }
-        final int lenPos = pos + 1;
-        final int elemLen = readBerLength(ber, lenPos);
-        return lenPos + berLengthFieldBytes(ber, lenPos) + elemLen;
     }
 
     public DirSyncControl setFlags(final int flags) {
