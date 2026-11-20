@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - fix SID assignment, canonical ACE ordering, and AD 2016+/Samba4 evaluation.
+ */
 package net.tirasa.adsddl.ntsd.utils;
 
 import cz.jhlade.adsddl.data.AdExtendedRight;
@@ -62,7 +65,7 @@ public class SDDLHelper {
      * which may only re-add the Everyone allow ACE when unchecking) and Samba 4 is guaranteed.
      *
      * @param sddl SDDL.
-     * @return <tt>true</tt> if user cannot change password; <tt>false</tt> otherwise.
+     * @return {@code true} if user cannot change password; {@code false} otherwise.
      */
     public static boolean isUserCannotChangePassword(final SDDL sddl) {
         if (sddl == null || sddl.getDacl() == null) {
@@ -103,7 +106,7 @@ public class SDDLHelper {
      * Set "User Cannot Change Password ACL".
      *
      * @param sddl SDDL.
-     * @param cannot <tt>true</tt> to set the ACL; <tt>false</tt> to unset.
+     * @param cannot {@code true} to set the ACL; {@code false} to unset.
      * @return updated SDDL.
      */
     public static SDDL userCannotChangePassword(final SDDL sddl, final Boolean cannot) {

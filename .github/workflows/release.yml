@@ -1,0 +1,120 @@
+#
+# Copyright (C) 2026 Jan Hladěna (jan.hladena@gmail.com)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: Release
+
+# Triggered manually by pushing a version tag matching vYY.M.P, e.g.:
+#   git tag v26.11.0 && git push origin v26.11.0
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21 (Zulu)
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Validate Tag Version
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag '$TAG' does not match format vYY.M.P[-suffix]."
+            exit 1
+          fi
+
+          POM_VERSION=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          if [[ "${POM_VERSION%-SNAPSHOT}" != "${VERSION%%-*}" ]]; then
+            echo "::error::Tag version ($VERSION) does not match pom.xml base version ($POM_VERSION)."
+            exit 1
+          fi
+
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Set Release Version in POM
+        run: |
+          mvn -B -q org.codehaus.mojo:versions-maven-plugin:2.19.1:set \
+            -DnewVersion=${{ steps.version.outputs.version }} \
+            -DgenerateBackupPoms=false
+
+      - name: Import GPG Key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent || true
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Build, Sign, and Publish to Maven Central
+        env:
+          SONATYPE_USER: ${{ secrets.SONATYPE_USER }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          mvn -B clean deploy -Pcentral-portal-release -s settings.xml \
+            -Dgpg.passphrase="${GPG_PASSPHRASE}"
+
+      - name: Prepare Release Artifacts
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          mkdir -p release
+          cp target/adsddl-${VERSION}.jar release/
+          cp target/adsddl-${VERSION}-sources.jar release/
+          cp target/adsddl-${VERSION}-javadoc.jar release/
+          cd release && sha256sum *.jar > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          FLAGS=()
+          if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then
+            FLAGS+=(--prerelease)
+          fi
+          gh release create "${GITHUB_REF_NAME}" release/* \
+            --title "ADSDDL ${VERSION}" \
+            --generate-notes \
+            "${FLAGS[@]}"

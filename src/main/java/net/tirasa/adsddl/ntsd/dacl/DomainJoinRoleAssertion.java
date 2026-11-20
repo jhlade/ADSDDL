@@ -19,6 +19,9 @@
  * COPYING PERMISSION STATEMENT
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * Modified by Jan Hladěna (2026) - use AdSchemaGuid/AdExtendedRight catalog and fix inherited object flag.
+ */
 package net.tirasa.adsddl.ntsd.dacl;
 
 import cz.jhlade.adsddl.data.AdExtendedRight;
@@ -32,7 +35,7 @@ import net.tirasa.adsddl.ntsd.data.AceRights.ObjectRight;
 
 /**
  * Represents an {@linkplain AdRoleAssertion} which specifies the criteria required to join or remove computers
- * to/from an AD domain in a given container (& its children) without any restrictions. This includes the ability
+ * to/from an AD domain in a given container (&amp; its children) without any restrictions. This includes the ability
  * to reset AD computer passwords, which is needed by some systems that manage domain joined computers.
  */
 public class DomainJoinRoleAssertion extends AdRoleAssertion {

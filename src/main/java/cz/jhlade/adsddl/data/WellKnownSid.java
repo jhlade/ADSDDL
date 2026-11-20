@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2026 Jan Hladěna (jan.hladena@gmail.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package cz.jhlade.adsddl.data;
 
 import java.util.Arrays;
@@ -7,7 +22,7 @@ import java.util.Map;
 import net.tirasa.adsddl.ntsd.SID;
 
 /**
- * Well-known Security Identifiers (SIDs) and two-letter SDDL SID aliases ([MS-DTYP] section 2.4.2.4 & 2.5.1.1).
+ * Well-known Security Identifiers (SIDs) and two-letter SDDL SID aliases ([MS-DTYP] section 2.4.2.4 &amp; 2.5.1.1).
  * <p>
  * Domain-relative well-known SIDs (such as {@link #DOMAIN_ADMINS} or {@link #ACCOUNT_OPERATORS}) can be instantiated
  * for a specific domain SID via {@link #toSid(SID)}. Universal/built-in SIDs can be instantiated directly via

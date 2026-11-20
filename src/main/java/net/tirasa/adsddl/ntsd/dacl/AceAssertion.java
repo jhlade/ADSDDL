@@ -19,6 +19,9 @@
  * COPYING PERMISSION STATEMENT
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * Modified by Jan Hladěna (2026) - symmetric equality and catalog enum constructors.
+ */
 package net.tirasa.adsddl.ntsd.dacl;
 
 import cz.jhlade.adsddl.data.AdExtendedRight;

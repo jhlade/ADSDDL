@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - fix big-endian padding in getBytes(value, length) and use CPU intrinsics.
+ */
 package net.tirasa.adsddl.ntsd.utils;
 
 import java.security.InvalidParameterException;

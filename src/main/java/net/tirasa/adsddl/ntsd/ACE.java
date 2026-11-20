@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - performance, wire-format validation, and API extensions.
+ */
 package net.tirasa.adsddl.ntsd;
 
 import cz.jhlade.adsddl.data.AdExtendedRight;
@@ -627,7 +630,7 @@ public class ACE {
      * {@inheritDoc }
      *
      * @param ace ACE to be compared with.
-     * @return <tt>true</tt> if equals; <tt>false</tt> otherwise.
+     * @return {@code true} if equals; {@code false} otherwise.
      */
     @Override
     public boolean equals(final Object ace) {

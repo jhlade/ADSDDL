@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - fix BER sequence length and default search option flags.
+ */
 package net.tirasa.adsddl.ntsd.controls;
 
 import java.nio.ByteBuffer;

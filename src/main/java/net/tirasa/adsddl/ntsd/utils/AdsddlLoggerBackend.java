@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Tirasa (info@tirasa.net)
+ * Copyright (C) 2026 Jan Hladěna (jan.hladena@gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

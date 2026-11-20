@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - null cookie handling and DirSync response BER decoding.
+ */
 package net.tirasa.adsddl.ntsd.controls;
 
 import cz.jhlade.adsddl.controls.BerCodec;

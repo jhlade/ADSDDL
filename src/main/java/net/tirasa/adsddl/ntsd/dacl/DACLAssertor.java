@@ -19,6 +19,9 @@
 * COPYING PERMISSION STATEMENT
 * SPDX-License-Identifier: Apache-2.0
 */
+/*
+ * Modified by Jan Hladěna (2026) - zero-allocation SID/GUID matching and AdsddlLogger integration.
+ */
 package net.tirasa.adsddl.ntsd.dacl;
 
 import cz.jhlade.adsddl.data.WellKnownSid;

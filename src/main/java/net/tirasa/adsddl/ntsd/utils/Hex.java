@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - lookup-table hex encoding and nibble decoding.
+ */
 package net.tirasa.adsddl.ntsd.utils;
 
 /**
@@ -23,7 +26,7 @@ public class Hex {
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
 
     /**
-     * Gets hex string corresponding to the given byte array from "<tt>from</tt>" position to "<tt>to's</tt>"
+     * Gets hex string corresponding to the given byte array from "{@code from}" position to "{@code to}".
      *
      * @param bytes bytes.
      * @param from from position.

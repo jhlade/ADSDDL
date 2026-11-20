@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - zero-allocation GUID formatting, decoding, and comparison.
+ */
 package net.tirasa.adsddl.ntsd.utils;
 
 /**

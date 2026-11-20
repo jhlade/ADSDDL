@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - O(1) lookup table and non-null fallback to UNEXPECTED.
+ */
 package net.tirasa.adsddl.ntsd.data;
 
 /**

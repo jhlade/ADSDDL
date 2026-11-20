@@ -18,26 +18,35 @@
 # ADSDDL
 Active Directory and Samba 4 `nTSecurityDescriptor` parser, evaluator, and serializer for Java.
 
-> **Fork notice:** This repository ([jhlade/ADSDDL](https://github.com/jhlade/ADSDDL)) is an extended and performance-optimized fork of the original [Tirasa/ADSDDL](https://github.com/Tirasa/ADSDDL) project created by [Tirasa](https://www.tirasa.net/). Package names and Maven coordinates will transition in upcoming releases.
+> **Fork notice:** This repository ([jhlade/ADSDDL](https://github.com/jhlade/ADSDDL)) is an extended and performance-optimized fork of the original [Tirasa/ADSDDL](https://github.com/Tirasa/ADSDDL) project created by [Tirasa](https://www.tirasa.net/) (originally published under `net.tirasa:adsddl:1.9`).
 
 ### Key Improvements over Upstream
 * Fixed `NumberFacility.getBytes(value, length)` big-endian padding and `SDDLHelper` SID construction (`S-1-1-0` / `S-1-5-10`).
 * Direct `ByteBuffer` parsing and zero-copy serialization without `IntBuffer` alignment restrictions.
 * Canonical Windows DACL ordering (`ACL.sortCanonical()`, `ACL.addAceCanonical(ACE)`) and wire-format validation for Microsoft Active Directory (2008–2025) and Samba 4.
-* Zero-allocation `SID.parse(String)` scanner and `GUID.equals(byte[], String)` comparator.
-* Full mutability of `SDDL`, `ACL`, `ACE`, and `SID`, including 16-bit `SddlControlFlag` management and all standard DS `AceRights.ObjectRight` flags.
+* Bidirectional SDDL string parser and formatter (`SDDL.parse(String)`, `SDDL.toSddlString()`, `ACE.parse(String)`) supporting all 38 two-letter `WellKnownSid` aliases with automatic domain SID inference.
+* Catalog enums (`AdExtendedRight`, `AdSchemaGuid`, `WellKnownSid`), fluent `AceBuilder`, composable `AceSelector` predicates, and high-level `DaclOperations` recipes (accidental deletion protection, group manager membership, Send-As, OU password reset delegation).
+* Pure BER codec (`BerCodec`) and response decoders (`DirSyncResponse`, `PagedResultsResponse`, `ExtendedDNControl`, `PermissiveModifyControl`) without internal JDK `com.sun.jndi.ldap` dependencies.
 * Pluggable `AdsddlLogger` facade with optional SLF4J binding, `java.util.logging` support, and silent no-op (`null`) mode.
 
-### Upstream Maven Dependency
-
-The original upstream release published by Tirasa on Maven Central is:
+### Maven Dependency
 
 ```xml
 <dependency>
-  <groupId>net.tirasa</groupId>
+  <groupId>cz.jhlade</groupId>
   <artifactId>adsddl</artifactId>
-  <version>1.9</version>
+  <version>26.11.0</version>
 </dependency>
 ```
 
-To use this fork locally, build and install it into your local Maven repository via `mvn clean install`.
+*(Original upstream release by Tirasa: `net.tirasa:adsddl:1.9`)*
+
+### Building and Releasing
+
+```bash
+mvn clean verify                                     # build and run unit tests
+mvn clean install                                    # install into local ~/.m2 repository
+mvn clean deploy -Pcentral-portal-release -s settings.xml  # publish release to Maven Central
+```
+
+Versioning follows the `YY.M.P` calendar scheme (e.g. `26.11.0`).

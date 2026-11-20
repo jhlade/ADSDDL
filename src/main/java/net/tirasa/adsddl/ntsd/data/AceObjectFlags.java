@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Modified by Jan Hladěna (2026) - unsigned bitmask operations and equals/hashCode.
+ */
 package net.tirasa.adsddl.ntsd.data;
 
 import java.util.ArrayList;
