@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.tirasa.adsddl.ntsd.SDDL;
+import net.tirasa.adsddl.ntsd.SID;
 import net.tirasa.adsddl.ntsd.controls.DirSyncControl;
 import net.tirasa.adsddl.ntsd.utils.GUID;
 import net.tirasa.adsddl.ntsd.utils.Hex;
@@ -93,7 +94,67 @@ public class BasicTest {
         final byte[] src = Files.readAllBytes(Path.of(getClass().getResource(AbstractTest.SDDL_ALL_SAMPLE).toURI()));
         final SDDL sddl = new SDDL(src);
 
-        // TODO: complete sddl string representation check
+        assertTrue(sddl.toString().startsWith("O:S-1-5-21-"));
+        assertTrue(sddl.toString().contains("G:S-1-5-21-"));
+        assertTrue(sddl.toString().contains("D:P("));
+        assertTrue(sddl.toString().contains("S:P("));
+    }
+
+    @Test
+    public void sidAndNumberFacilityFixes() {
+        // Verify 6-byte big-endian padding fix in NumberFacility.getBytes(val, 6)
+        assertTrue(Arrays.equals(
+                new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 },
+                NumberFacility.getBytes(0x000000000001, 6)));
+        assertTrue(Arrays.equals(
+                new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 },
+                NumberFacility.getBytes(0x000000000005, 6)));
+
+        final SID everyone = SID.newInstance(NumberFacility.getBytes(0x000000000001, 6))
+                .addSubAuthority(NumberFacility.getBytes(0));
+        assertEquals("S-1-1-0", everyone.toString());
+        assertEquals(everyone, SID.parse("S-1-1-0"));
+        assertEquals(everyone.hashCode(), SID.parse("S-1-1-0").hashCode());
+
+        final SID self = SID.newInstance(NumberFacility.getBytes(0x000000000005, 6))
+                .addSubAuthority(NumberFacility.getBytes(0x0A));
+        assertEquals("S-1-5-10", self.toString());
+        assertEquals(self, SID.parse("S-1-5-10"));
+        assertEquals(self.hashCode(), SID.parse("S-1-5-10").hashCode());
+
+        final String domainSidStr = "S-1-5-21-1835709989-2027683138-697581538-1139";
+        final SID domainSid = SID.parse(domainSidStr);
+        assertEquals(domainSidStr, domainSid.toString());
+        assertEquals(domainSid, SID.parse(domainSid.toByteArray()));
+    }
+
+    @Test
+    public void sddlHelperUserCannotChangePassword() throws IOException, URISyntaxException {
+        final byte[] src = Files.readAllBytes(Path.of(getClass().getResource(AbstractTest.DACL_ONLY_SAMPLE).toURI()));
+        final SDDL sddl = new SDDL(src);
+
+        // Toggle userCannotChangePassword to true, then false, then true
+        SDDLHelper.userCannotChangePassword(sddl, true);
+        assertTrue(SDDLHelper.isUserCannotChangePassword(sddl));
+
+        // Verify roundtrip and canonical ordering (explicit deny ACEs before allow and inherited ACEs)
+        final SDDL parsedDenied = new SDDL(sddl.toByteArray());
+        assertTrue(SDDLHelper.isUserCannotChangePassword(parsedDenied));
+        assertEquals(sddl, parsedDenied);
+
+        SDDLHelper.userCannotChangePassword(parsedDenied, false);
+        assertTrue(!SDDLHelper.isUserCannotChangePassword(parsedDenied));
+
+        // Remove UCP ACEs and verify fresh creation creates valid S-1-1-0 and S-1-5-10 ACEs in canonical order
+        parsedDenied.getDacl().getAces().removeIf(ace ->
+                ace.getObjectType() != null
+                && GUID.getGuidAsString(ace.getObjectType()).equals(SDDLHelper.UCP_OBJECT_GUID));
+        assertTrue(!SDDLHelper.isUserCannotChangePassword(parsedDenied));
+
+        SDDLHelper.userCannotChangePassword(parsedDenied, true);
+        assertTrue(SDDLHelper.isUserCannotChangePassword(parsedDenied));
+        assertTrue(parsedDenied.toString().contains("(OD;;CR;" + SDDLHelper.UCP_OBJECT_GUID + ";;S-1-1-0)"));
+        assertTrue(parsedDenied.toString().contains("(OD;;CR;" + SDDLHelper.UCP_OBJECT_GUID + ";;S-1-5-10)"));
     }
 
     @Test
