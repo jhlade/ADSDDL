@@ -34,12 +34,13 @@ public class Hex {
         if (bytes == null || from >= to) {
             return "";
         }
-        final char[] hexChars = new char[(to - from) * 2];
-        for (int i = from; i < to; i++) {
-            int v = bytes[i] & 0xFF;
-            int idx = (i - from) * 2;
+        final int len = to - from;
+        final char[] hexChars = new char[len << 1];
+        for (int i = 0; i < len; i++) {
+            final int v = bytes[from + i] & 0xFF;
+            final int idx = i << 1;
             hexChars[idx] = HEX_ARRAY[v >>> 4];
-            hexChars[idx + 1] = HEX_ARRAY[v & 0x0F];
+            hexChars[idx | 1] = HEX_ARRAY[v & 0x0F];
         }
         return new String(hexChars);
     }
@@ -65,9 +66,8 @@ public class Hex {
             return "";
         }
         final char[] hexChars = new char[bytes.length * 3];
-        for (int i = 0; i < bytes.length; i++) {
-            int v = bytes[i] & 0xFF;
-            int idx = i * 3;
+        for (int i = 0, idx = 0; i < bytes.length; i++, idx += 3) {
+            final int v = bytes[i] & 0xFF;
             hexChars[idx] = '\\';
             hexChars[idx + 1] = HEX_ARRAY[v >>> 4];
             hexChars[idx + 2] = HEX_ARRAY[v & 0x0F];
@@ -82,8 +82,43 @@ public class Hex {
      * @return hex string.
      */
     public static String get(byte b) {
-        int v = b & 0xFF;
+        final int v = b & 0xFF;
         return new String(new char[] { HEX_ARRAY[v >>> 4], HEX_ARRAY[v & 0x0F] });
+    }
+
+    /**
+     * Decodes a single hex character into its 4-bit nibble value, or -1 if invalid.
+     *
+     * @param c hex character.
+     * @return 0..15, or -1 if not a valid hex character.
+     */
+    public static int decodeNibble(final char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
+    }
+
+    /**
+     * Decodes a two-character hex byte from a string at the given offset.
+     *
+     * @param str source string.
+     * @param offset character offset.
+     * @return decoded byte.
+     */
+    public static byte decodeByte(final String str, final int offset) {
+        final int hi = decodeNibble(str.charAt(offset));
+        final int lo = decodeNibble(str.charAt(offset + 1));
+        if ((hi | lo) < 0) {
+            throw new IllegalArgumentException("Invalid hex byte at offset " + offset + " in: " + str);
+        }
+        return (byte) ((hi << 4) | lo);
     }
 
     /**
@@ -96,8 +131,9 @@ public class Hex {
         if (bytes == null) {
             return null;
         }
-        byte[] res = new byte[bytes.length];
-        for (int i = 0, j = bytes.length - 1; j >= 0; i++, j--) {
+        final int len = bytes.length;
+        final byte[] res = new byte[len];
+        for (int i = 0, j = len - 1; j >= 0; i++, j--) {
             res[i] = bytes[j];
         }
         return res;

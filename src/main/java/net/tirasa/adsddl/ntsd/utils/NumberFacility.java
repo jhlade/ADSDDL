@@ -109,7 +109,11 @@ public class NumberFacility {
      * @return trimmed array.
      */
     public static byte[] rightTrim(final byte... bytes) {
-        return Hex.reverse(leftTrim(Hex.reverse(bytes)));
+        int pos = bytes.length - 1;
+        while (pos >= 0 && bytes[pos] == 0x00) {
+            pos--;
+        }
+        return pos >= 0 ? Arrays.copyOf(bytes, pos + 1) : new byte[] { 0x00 };
     }
 
     /**
@@ -123,15 +127,19 @@ public class NumberFacility {
             throw new InvalidParameterException("Invalid number of bytes");
         }
 
-        final boolean[] res = new boolean[bytes.length * 8];
+        final boolean[] res = new boolean[bytes.length << 3];
 
-        int pos = 0;
-
-        for (byte b : bytes) {
-            for (boolean bool : getBits(b)) {
-                res[pos] = bool;
-                pos++;
-            }
+        for (int i = 0; i < bytes.length; i++) {
+            final int b = bytes[i] & 0xFF;
+            final int base = i << 3;
+            res[base] = (b & 0x80) != 0;
+            res[base + 1] = (b & 0x40) != 0;
+            res[base + 2] = (b & 0x20) != 0;
+            res[base + 3] = (b & 0x10) != 0;
+            res[base + 4] = (b & 0x08) != 0;
+            res[base + 5] = (b & 0x04) != 0;
+            res[base + 6] = (b & 0x02) != 0;
+            res[base + 7] = (b & 0x01) != 0;
         }
 
         return res;
@@ -144,11 +152,17 @@ public class NumberFacility {
      * @return bits.
      */
     public static boolean[] getBits(final byte b) {
-        final boolean[] res = new boolean[8];
-        for (int i = 0; i < 8; i++) {
-            res[7 - i] = (b & (1 << i)) != 0;
-        }
-        return res;
+        final int v = b & 0xFF;
+        return new boolean[] {
+            (v & 0x80) != 0,
+            (v & 0x40) != 0,
+            (v & 0x20) != 0,
+            (v & 0x10) != 0,
+            (v & 0x08) != 0,
+            (v & 0x04) != 0,
+            (v & 0x02) != 0,
+            (v & 0x01) != 0
+        };
     }
 
     /**
@@ -168,7 +182,14 @@ public class NumberFacility {
      * @return unsigned integer.
      */
     public static long getReverseUInt(final byte... bytes) {
-        return getUInt(Hex.reverse(bytes));
+        if (bytes.length > 4) {
+            throw new InvalidParameterException("Invalid number of bytes");
+        }
+        long res = 0;
+        for (int i = bytes.length - 1; i >= 0; i--) {
+            res = (res << 8) | (bytes[i] & 0xFFL);
+        }
+        return res;
     }
 
     /**
@@ -179,7 +200,7 @@ public class NumberFacility {
      * @return reversed integer value.
      */
     public static int getReverseInt(final int value) {
-        return (int) getReverseUInt(value);
+        return Integer.reverseBytes(value);
     }
 
     /**
@@ -190,7 +211,7 @@ public class NumberFacility {
      * @return reversed unsigned integer value.
      */
     public static long getReverseUInt(final int value) {
-        return getReverseUInt(getBytes(value));
+        return Integer.reverseBytes(value) & 0xFFFFFFFFL;
     }
 
     /**
@@ -216,10 +237,7 @@ public class NumberFacility {
 
         long res = 0;
         for (int i = 0; i < bytes.length; i++) {
-            res |= bytes[i] & 0xFF;
-            if (i < bytes.length - 1) {
-                res <<= 8;
-            }
+            res = (res << 8) | (bytes[i] & 0xFFL);
         }
 
         return res;
