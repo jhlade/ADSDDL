@@ -15,6 +15,7 @@
  */
 package net.tirasa.adsddl.ntsd;
 
+import cz.jhlade.adsddl.sddl.SddlParser;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -140,6 +141,39 @@ public class SDDL {
     public SDDL(byte[] src) {
         final ByteBuffer sddlBuffer = ByteBuffer.wrap(src);
         parse(sddlBuffer, 0);
+    }
+
+    /**
+     * Parses an SDDL string representation into an {@link SDDL} instance.
+     *
+     * @param sddlString SDDL string (e.g. {@code "O:BAG:SYD:PAI(A;;GA;;;BA)"}).
+     * @return parsed {@link SDDL} instance.
+     */
+    public static SDDL parse(final String sddlString) {
+        return SddlParser.parse(sddlString);
+    }
+
+    /**
+     * Parses an SDDL string representation into an {@link SDDL} instance, resolving domain-relative well-known
+     * SID aliases (such as {@code DA}, {@code DU}, {@code EA}) against {@code domainSid}.
+     *
+     * @param sddlString SDDL string.
+     * @param domainSid domain SID, or {@code null}.
+     * @return parsed {@link SDDL} instance.
+     */
+    public static SDDL parse(final String sddlString, final SID domainSid) {
+        return SddlParser.parse(sddlString, domainSid);
+    }
+
+    /**
+     * Formats this security descriptor as an SDDL string using two-letter well-known SID aliases
+     * (e.g. {@code WD}, {@code PS}, {@code SY}, {@code BA}) and exact ACL control flags ({@code P}, {@code AR},
+     * {@code AI}).
+     *
+     * @return canonical SDDL string with SID aliases.
+     */
+    public String toSddlString() {
+        return SddlParser.format(this, true);
     }
 
     /**

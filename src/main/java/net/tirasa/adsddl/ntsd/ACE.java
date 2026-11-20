@@ -18,6 +18,7 @@ package net.tirasa.adsddl.ntsd;
 import cz.jhlade.adsddl.data.AdExtendedRight;
 import cz.jhlade.adsddl.data.AdSchemaGuid;
 import cz.jhlade.adsddl.data.WellKnownSid;
+import cz.jhlade.adsddl.sddl.SddlParser;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
@@ -101,6 +102,28 @@ public class ACE {
         final ACE ace = new ACE();
         ace.setType(type);
         return ace;
+    }
+
+    /**
+     * Parses an SDDL ACE string {@code "(type;flags;rights;obj_guid;inh_guid;sid)"} into an {@link ACE} instance.
+     *
+     * @param aceString SDDL ACE string.
+     * @return parsed {@link ACE}.
+     */
+    public static ACE parse(final String aceString) {
+        return SddlParser.parseAce(aceString, null);
+    }
+
+    /**
+     * Parses an SDDL ACE string {@code "(type;flags;rights;obj_guid;inh_guid;sid)"} into an {@link ACE} instance,
+     * resolving any domain-relative SID alias against {@code domainSid}.
+     *
+     * @param aceString SDDL ACE string.
+     * @param domainSid domain SID, or {@code null}.
+     * @return parsed {@link ACE}.
+     */
+    public static ACE parse(final String aceString, final SID domainSid) {
+        return SddlParser.parseAce(aceString, domainSid);
     }
 
     /**
