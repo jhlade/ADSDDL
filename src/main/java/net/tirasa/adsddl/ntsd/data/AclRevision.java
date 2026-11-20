@@ -69,12 +69,13 @@ public enum AclRevision {
      * @return ACL revision.
      */
     public static AclRevision parseValue(final byte value) {
-        for (AclRevision type : AclRevision.values()) {
-            if (type.getValue() == value) {
-                return type;
-            }
+        switch (value) {
+            case 0x02:
+                return ACL_REVISION;
+            case 0x04:
+                return ACL_REVISION_DS;
+            default:
+                return UNEXPECTED;
         }
-
-        return UNEXPECTED;
     }
 }

@@ -97,14 +97,13 @@ public class AceObjectFlags {
     public static AceObjectFlags parseValue(final int value) {
         final AceObjectFlags res = new AceObjectFlags();
 
-        res.others = value;
-
-        for (AceObjectFlags.Flag type : AceObjectFlags.Flag.values()) {
-            if ((value & type.getValue()) == type.getValue()) {
-                res.flags.add(type);
-                res.others &= ~type.getValue();
-            }
+        if ((value & 0x00000001) != 0) {
+            res.flags.add(Flag.ACE_OBJECT_TYPE_PRESENT);
         }
+        if ((value & 0x00000002) != 0) {
+            res.flags.add(Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT);
+        }
+        res.others = value & ~0x00000003;
 
         return res;
     }

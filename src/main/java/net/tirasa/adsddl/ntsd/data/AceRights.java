@@ -130,11 +130,43 @@ public class AceRights {
          */
         CR(0x00000100),
         /**
+         * ADS_RIGHT_DS_LIST_OBJECT - The trustee can list the object.
+         */
+        LO(0x00000080),
+        /**
+         * ADS_RIGHT_DS_DELETE_TREE - The trustee can delete all child objects of this object, regardless of the
+         * permissions on the child objects.
+         */
+        DT(0x00000040),
+        /**
          * ADS_RIGHT_DS_WRITE_PROP - The ObjectType GUID identifies a property set or property of the object.
          * The ACE controls the trustee's right to write the property or property set.
          */
-        WP(0x00000020);
-        
+        WP(0x00000020),
+        /**
+         * ADS_RIGHT_DS_READ_PROP - The ObjectType GUID identifies a property set or property of the object.
+         * The ACE controls the trustee's right to read the property or property set.
+         */
+        RP(0x00000010),
+        /**
+         * ADS_RIGHT_DS_SELF - The ObjectType GUID identifies a validated write to the object.
+         */
+        SW(0x00000008),
+        /**
+         * ADS_RIGHT_ACTRL_DS_LIST - The trustee can list child objects of this object.
+         */
+        LC(0x00000004),
+        /**
+         * ADS_RIGHT_DS_DELETE_CHILD - The ObjectType GUID identifies a type of child object.
+         * The ACE controls the trustee's right to delete child objects of that type.
+         */
+        DC(0x00000002),
+        /**
+         * ADS_RIGHT_DS_CREATE_CHILD - The ObjectType GUID identifies a type of child object.
+         * The ACE controls the trustee's right to create child objects of that type.
+         */
+        CC(0x00000001);
+
         // FA(0x001F01FF),
         // FX(0x001200A0),
         // FW(0x00100116),
@@ -142,14 +174,7 @@ public class AceRights {
         // KA(0x00000019),
         // KR(0x0000003F),
         // KX(0x00000019),
-        // KW(0x00000006),
-        // LO(0x00000080),
-        // DT(0x00000040),
-        // RP(0x00000010),
-        // SW(0x00000008),
-        // LC(0x00000004),
-        // DC(0x00000002),
-        // CC(0x00000001);
+        // KW(0x00000006);
 
         private final int value;
 
@@ -170,6 +195,19 @@ public class AceRights {
         public int getValue() {
             return value;
         }
+    }
+
+    private static final ObjectRight[] BY_BIT = new ObjectRight[32];
+
+    private static final int KNOWN_MASK;
+
+    static {
+        int mask = 0;
+        for (ObjectRight right : ObjectRight.values()) {
+            BY_BIT[Integer.numberOfTrailingZeros(right.value)] = right;
+            mask |= right.value;
+        }
+        KNOWN_MASK = mask;
     }
 
     /**
@@ -201,16 +239,17 @@ public class AceRights {
             return res;
         }
 
-        int rem = value;
-
-        for (ObjectRight type : ObjectRight.values()) {
-            if ((value & type.getValue()) == type.getValue()) {
-                res.rights.add(type);
-                rem &= ~type.getValue();
+        int known = value & KNOWN_MASK;
+        while (known != 0) {
+            final int highestBit = Integer.highestOneBit(known);
+            final ObjectRight right = BY_BIT[Integer.numberOfTrailingZeros(highestBit)];
+            if (right != null) {
+                res.rights.add(right);
             }
+            known ^= highestBit;
         }
 
-        res.others = rem & 0xFFFFFFFFL;
+        res.others = (value & ~KNOWN_MASK) & 0xFFFFFFFFL;
 
         return res;
     }

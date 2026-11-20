@@ -149,6 +149,14 @@ public enum AceType {
         return str.isEmpty() ? name() : str;
     }
 
+    private static final AceType[] LOOKUP = new AceType[256];
+
+    static {
+        for (AceType type : AceType.values()) {
+            LOOKUP[type.value & 0xFF] = type;
+        }
+    }
+
     /**
      * Parses byte value.
      *
@@ -156,12 +164,7 @@ public enum AceType {
      * @return ACE type.
      */
     public static AceType parseValue(final byte value) {
-        for (AceType type : AceType.values()) {
-            if (type.getValue() == value) {
-                return type;
-            }
-        }
-
-        return UNEXPECTED;
+        final AceType res = LOOKUP[value & 0xFF];
+        return res == null ? UNEXPECTED : res;
     }
 }

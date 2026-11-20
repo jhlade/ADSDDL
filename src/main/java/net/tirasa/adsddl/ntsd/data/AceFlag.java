@@ -99,6 +99,14 @@ public enum AceFlag {
         return str;
     }
 
+    private static final AceFlag[] BY_BIT = new AceFlag[8];
+
+    static {
+        for (AceFlag flag : AceFlag.values()) {
+            BY_BIT[Integer.numberOfTrailingZeros(flag.value & 0xFF)] = flag;
+        }
+    }
+
     /**
      * Parse byte value.
      *
@@ -106,12 +114,16 @@ public enum AceFlag {
      * @return ACE flags.
      */
     public static List<AceFlag> parseValue(final byte value) {
-        final List<AceFlag> res = new ArrayList<>();
+        int bits = value & 0xDF; // valid ACE flags mask: 0x01|0x02|0x04|0x08|0x10|0x40|0x80
+        final List<AceFlag> res = new ArrayList<>(Integer.bitCount(bits));
 
-        for (AceFlag type : AceFlag.values()) {
-            if ((value & type.getValue()) == type.getValue()) {
-                res.add(type);
+        while (bits != 0) {
+            final int lowestBit = bits & -bits;
+            final AceFlag flag = BY_BIT[Integer.numberOfTrailingZeros(lowestBit)];
+            if (flag != null) {
+                res.add(flag);
             }
+            bits ^= lowestBit;
         }
 
         return res;
