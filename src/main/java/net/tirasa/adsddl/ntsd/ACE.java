@@ -438,56 +438,50 @@ public class ACE {
     }
 
     /**
+     * Writes this ACE directly into a little-endian ByteBuffer without intermediate array allocations.
+     *
+     * @param buff target little-endian ByteBuffer.
+     */
+    void writeTo(final ByteBuffer buff) {
+        final int size = getSize();
+
+        buff.put(type == null ? AceType.UNEXPECTED.getValue() : type.getValue());
+
+        byte flagSRC = 0x00;
+        final List<AceFlag> fls = getFlags();
+        for (int i = 0, n = fls.size(); i < n; i++) {
+            flagSRC |= fls.get(i).getValue();
+        }
+        buff.put(flagSRC);
+
+        buff.putShort((short) size);
+        buff.putInt(rights == null ? 0 : (int) rights.asUInt());
+
+        if (objectFlags != null) {
+            buff.putInt((int) objectFlags.asUInt());
+        }
+        if (objectType != null) {
+            buff.put(objectType);
+        }
+        if (inheritedObjectType != null) {
+            buff.put(inheritedObjectType);
+        }
+        if (sid != null) {
+            sid.writeTo(buff);
+        }
+        if (applicationData != null) {
+            buff.put(applicationData);
+        }
+    }
+
+    /**
      * Serializes to byte array.
      *
      * @return serialized ACE.
      */
     public byte[] toByteArray() {
-        final int size = getSize();
-
-        final ByteBuffer buff = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
-
-        // Add type byte
-        buff.put(type == null ? AceType.UNEXPECTED.getValue() : type.getValue());
-
-        // add flags byte
-        byte flagSRC = 0x00;
-        for (AceFlag flag : getFlags()) {
-            flagSRC |= flag.getValue();
-        }
-        buff.put(flagSRC);
-
-        // add size bytes (2 bytes little-endian)
-        buff.putShort((short) size);
-
-        // add right mask (4 bytes little-endian)
-        buff.putInt(rights == null ? 0 : (int) rights.asUInt());
-
-        // add object flags (4 bytes little-endian)
-        if (objectFlags != null) {
-            buff.putInt((int) objectFlags.asUInt());
-        }
-
-        // add object type
-        if (objectType != null) {
-            buff.put(objectType);
-        }
-
-        // add inherited object type
-        if (inheritedObjectType != null) {
-            buff.put(inheritedObjectType);
-        }
-
-        // add sid
-        if (sid != null) {
-            buff.put(sid.toByteArray());
-        }
-
-        // add application data
-        if (applicationData != null) {
-            buff.put(applicationData);
-        }
-
+        final ByteBuffer buff = ByteBuffer.allocate(getSize()).order(ByteOrder.LITTLE_ENDIAN);
+        writeTo(buff);
         return buff.array();
     }
 

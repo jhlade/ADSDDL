@@ -323,17 +323,15 @@ public class SDDL {
     }
 
     /**
-     * Serializes SDDL as byte array.
+     * Serializes SDDL as byte array using a single contiguous ByteBuffer without intermediate byte[] allocations.
      *
-     * @return SDL as byte array.
+     * @return SDDL as byte array.
      */
     public byte[] toByteArray() {
         final ByteBuffer buff = ByteBuffer.allocate(getSize()).order(ByteOrder.LITTLE_ENDIAN);
 
-        // add revision
+        // add revision & reserved
         buff.put(revision);
-
-        // add reserved
         buff.put((byte) 0x00);
 
         // add control flags
@@ -343,49 +341,34 @@ public class SDDL {
         int nextAvailablePosition = 20;
 
         // add owner SID
-        buff.position(4);
-        if (owner == null) {
-            buff.putInt(0);
-        } else {
-            buff.putInt(nextAvailablePosition);
+        buff.putInt(4, owner == null ? 0 : nextAvailablePosition);
+        if (owner != null) {
             buff.position(nextAvailablePosition);
-            final byte[] ownerBytes = owner.toByteArray();
-            buff.put(ownerBytes);
-            nextAvailablePosition += ownerBytes.length;
+            owner.writeTo(buff);
+            nextAvailablePosition = buff.position();
         }
 
         // add group SID
-        buff.position(8);
-        if (group == null) {
-            buff.putInt(0);
-        } else {
-            buff.putInt(nextAvailablePosition);
+        buff.putInt(8, group == null ? 0 : nextAvailablePosition);
+        if (group != null) {
             buff.position(nextAvailablePosition);
-            final byte[] groupBytes = group.toByteArray();
-            buff.put(groupBytes);
-            nextAvailablePosition += groupBytes.length;
+            group.writeTo(buff);
+            nextAvailablePosition = buff.position();
         }
 
         // add SACL
-        buff.position(12);
-        if (sacl == null) {
-            buff.putInt(0);
-        } else {
-            buff.putInt(nextAvailablePosition);
+        buff.putInt(12, sacl == null ? 0 : nextAvailablePosition);
+        if (sacl != null) {
             buff.position(nextAvailablePosition);
-            final byte[] saclBytes = sacl.toByteArray();
-            buff.put(saclBytes);
-            nextAvailablePosition += saclBytes.length;
+            sacl.writeTo(buff);
+            nextAvailablePosition = buff.position();
         }
 
         // add DACL
-        buff.position(16);
-        if (dacl == null) {
-            buff.putInt(0);
-        } else {
-            buff.putInt(nextAvailablePosition);
+        buff.putInt(16, dacl == null ? 0 : nextAvailablePosition);
+        if (dacl != null) {
             buff.position(nextAvailablePosition);
-            buff.put(dacl.toByteArray());
+            dacl.writeTo(buff);
         }
 
         return buff.array();

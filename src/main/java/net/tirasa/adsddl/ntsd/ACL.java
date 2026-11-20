@@ -19,8 +19,11 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import net.tirasa.adsddl.ntsd.data.AceFlag;
+import net.tirasa.adsddl.ntsd.data.AceType;
 import net.tirasa.adsddl.ntsd.data.AclRevision;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 import org.slf4j.Logger;
@@ -193,36 +196,102 @@ public class ACL {
         return aces.get(i);
     }
 
+    private static final Comparator<ACE> CANONICAL_ACE_COMPARATOR =
+            Comparator.comparingInt(ACL::getCanonicalRank);
+
+    private static int getCanonicalRank(final ACE ace) {
+        if (ace == null) {
+            return 5;
+        }
+        // Inherited ACEs always follow explicit ACEs while preserving their relative order
+        if (ace.getFlags().contains(AceFlag.INHERITED_ACE)) {
+            return 4;
+        }
+        final AceType type = ace.getType();
+        if (type == AceType.ACCESS_DENIED_ACE_TYPE
+                || type == AceType.ACCESS_DENIED_CALLBACK_ACE_TYPE) {
+            return 0;
+        }
+        if (type == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE
+                || type == AceType.ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE) {
+            return 1;
+        }
+        if (type == AceType.ACCESS_ALLOWED_ACE_TYPE
+                || type == AceType.ACCESS_ALLOWED_COMPOUND_ACE_TYPE
+                || type == AceType.ACCESS_ALLOWED_CALLBACK_ACE_TYPE) {
+            return 2;
+        }
+        if (type == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
+                || type == AceType.ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE) {
+            return 3;
+        }
+        return 4;
+    }
+
+    /**
+     * Sorts ACEs in this ACL into Windows canonical DACL order ([MS-DTYP] 2.4.5):
+     * 1. Explicit Access-Denied ACEs
+     * 2. Explicit Access-Denied Object ACEs
+     * 3. Explicit Access-Allowed ACEs
+     * 4. Explicit Access-Allowed Object ACEs
+     * 5. Inherited ACEs (preserving original relative order)
+     *
+     * @return the current ACL instance.
+     */
+    public ACL sortCanonical() {
+        aces.sort(CANONICAL_ACE_COMPARATOR);
+        return this;
+    }
+
+    /**
+     * Inserts an ACE into this ACL maintaining Windows canonical DACL order.
+     *
+     * @param ace ACE to insert.
+     * @return the current ACL instance.
+     */
+    public ACL addAceCanonical(final ACE ace) {
+        if (ace == null) {
+            return this;
+        }
+        final int rank = getCanonicalRank(ace);
+        int insertIndex = aces.size();
+        for (int i = 0, n = aces.size(); i < n; i++) {
+            if (getCanonicalRank(aces.get(i)) > rank) {
+                insertIndex = i;
+                break;
+            }
+        }
+        aces.add(insertIndex, ace);
+        return this;
+    }
+
+    /**
+     * Writes this ACL directly into a little-endian ByteBuffer without intermediate array allocations.
+     *
+     * @param buff target little-endian ByteBuffer.
+     */
+    void writeTo(final ByteBuffer buff) {
+        final int size = getSize();
+
+        buff.put(revision == null ? AclRevision.UNEXPECTED.getValue() : revision.getValue());
+        buff.put((byte) 0x00);
+        buff.putShort((short) size);
+        buff.putShort((short) getAceCount());
+        buff.putShort((short) 0);
+
+        for (int i = 0, n = aces.size(); i < n; i++) {
+            aces.get(i).writeTo(buff);
+        }
+    }
+
     /**
      * Serializes to byte array.
      *
      * @return serialized ACL.
      */
     public byte[] toByteArray() {
-        final int size = getSize();
-
-        final ByteBuffer buff = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
-
-        // add revision
-        buff.put(revision == null ? AclRevision.UNEXPECTED.getValue() : revision.getValue());
-
-        // add reserved
-        buff.put((byte) 0x00);
-
-        // add size (2 bytes little-endian)
-        buff.putShort((short) size);
-
-        // add ace count (2 bytes little-endian)
-        buff.putShort((short) getAceCount());
-
-        // add reserved (2 bytes)
-        buff.putShort((short) 0);
-
-        // add aces
-        for (ACE ace : aces) {
-            buff.put(ace.toByteArray());
-        }
-
+        final ByteBuffer buff = ByteBuffer.allocate(getSize()).order(ByteOrder.LITTLE_ENDIAN);
+        writeTo(buff);
         return buff.array();
     }
 

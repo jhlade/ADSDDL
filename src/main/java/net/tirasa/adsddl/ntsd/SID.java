@@ -107,41 +107,153 @@ public class SID {
 
     /**
      * Instances a SID instance from its string representation (e.g. "S-1-5-10" or "S-1-5-21-...").
+     * Uses a single-pass character scanner without intermediate regex/array allocations.
      *
      * @param str SID string representation.
      * @return SID instance.
      */
     public static SID parse(final String str) {
-        if (str == null || !str.startsWith("S-") && !str.startsWith("s-")) {
+        final int len;
+        if (str == null || (len = str.length()) < 5) {
+            throw new IllegalArgumentException("Invalid SID string: " + str);
+        }
+        final char c0 = str.charAt(0);
+        if ((c0 != 'S' && c0 != 's') || str.charAt(1) != '-') {
             throw new IllegalArgumentException("Invalid SID string: " + str);
         }
 
-        final String[] parts = str.split("-");
-        if (parts.length < 3) {
+        // Parse revision
+        int idx = 2;
+        int dash = str.indexOf('-', idx);
+        if (dash <= idx) {
+            throw new IllegalArgumentException("Invalid SID string: " + str);
+        }
+        final byte rev = (byte) (parseUnsignedSegment(str, idx, dash, 10) & 0xFF);
+
+        // Parse identifier authority
+        idx = dash + 1;
+        dash = str.indexOf('-', idx);
+        final int authEnd = dash < 0 ? len : dash;
+        if (authEnd <= idx) {
             throw new IllegalArgumentException("Invalid SID string: " + str);
         }
 
-        final byte rev = (byte) (Integer.parseInt(parts[1]) & 0xFF);
-        final String authStr = parts[2];
-        final byte[] authority;
-        if (authStr.startsWith("0x") || authStr.startsWith("0X")) {
-            authority = NumberFacility.getBytes(Long.parseUnsignedLong(authStr.substring(2), 16), 6);
-        } else if (authStr.length() == 12 && !authStr.chars().allMatch(Character::isDigit)) {
-            authority = NumberFacility.getBytes(Long.parseUnsignedLong(authStr, 16), 6);
+        final long authVal;
+        if (authEnd - idx > 2 && str.charAt(idx) == '0'
+                && (str.charAt(idx + 1) == 'x' || str.charAt(idx + 1) == 'X')) {
+            authVal = parseUnsignedSegment(str, idx + 2, authEnd, 16);
+        } else if (authEnd - idx == 12 && hasHexLetters(str, idx, authEnd)) {
+            authVal = parseUnsignedSegment(str, idx, authEnd, 16);
         } else {
-            authority = NumberFacility.getBytes(Long.parseUnsignedLong(authStr), 6);
+            authVal = parseUnsignedSegment(str, idx, authEnd, 10);
         }
 
         final SID sid = new SID();
-        sid.setRevision(rev);
-        sid.setIdentifierAuthority(authority);
+        sid.revision = rev;
+        sid.identifierAuthority = new byte[] {
+            (byte) (authVal >>> 40),
+            (byte) (authVal >>> 32),
+            (byte) (authVal >>> 24),
+            (byte) (authVal >>> 16),
+            (byte) (authVal >>> 8),
+            (byte) authVal
+        };
 
-        for (int i = 3; i < parts.length; i++) {
-            long sub = Long.parseUnsignedLong(parts[i]);
-            sid.addSubAuthority(NumberFacility.getUIntBytes(sub));
+        // Parse sub-authorities
+        while (dash >= 0 && dash < len) {
+            idx = dash + 1;
+            dash = str.indexOf('-', idx);
+            final int subEnd = dash < 0 ? len : dash;
+            if (subEnd <= idx) {
+                throw new IllegalArgumentException("Invalid SID string: " + str);
+            }
+            final int sub = (int) parseUnsignedSegment(str, idx, subEnd, 10);
+            sid.subAuthorities.add(new byte[] {
+                (byte) (sub >>> 24),
+                (byte) (sub >>> 16),
+                (byte) (sub >>> 8),
+                (byte) sub
+            });
         }
 
         return sid;
+    }
+
+    private static boolean hasHexLetters(final String str, final int start, final int end) {
+        for (int i = start; i < end; i++) {
+            final char c = str.charAt(i);
+            if (c < '0' || c > '9') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static long parseUnsignedSegment(final String str, final int start, final int end, final int radix) {
+        long res = 0;
+        for (int i = start; i < end; i++) {
+            final int digit = Hex.decodeNibble(str.charAt(i));
+            if (digit < 0 || digit >= radix) {
+                throw new NumberFormatException("Invalid number in SID: " + str);
+            }
+            res = res * radix + digit;
+        }
+        return res;
+    }
+
+    /**
+     * Checks whether this SID matches the given raw 6-byte identifier authority and single 32-bit sub-authority
+     * without cloning internal byte arrays.
+     *
+     * @param authorityHigh16 high 16 bits of the 48-bit identifier authority.
+     * @param authorityLow32 low 32 bits of the 48-bit identifier authority.
+     * @param subAuthority0 the single 32-bit sub-authority value.
+     * @return true if this SID has 1 sub-authority and matches.
+     */
+    public boolean matchesSingleSubAuthority(
+            final int authorityHigh16,
+            final int authorityLow32,
+            final int subAuthority0) {
+        if (identifierAuthority == null || subAuthorities.size() != 1) {
+            return false;
+        }
+        final int hi = ((identifierAuthority[0] & 0xFF) << 8) | (identifierAuthority[1] & 0xFF);
+        final int lo = ((identifierAuthority[2] & 0xFF) << 24)
+                | ((identifierAuthority[3] & 0xFF) << 16)
+                | ((identifierAuthority[4] & 0xFF) << 8)
+                | (identifierAuthority[5] & 0xFF);
+        if (hi != authorityHigh16 || lo != authorityLow32) {
+            return false;
+        }
+        final byte[] sub = subAuthorities.get(0);
+        final int subVal = ((sub[0] & 0xFF) << 24)
+                | ((sub[1] & 0xFF) << 16)
+                | ((sub[2] & 0xFF) << 8)
+                | (sub[3] & 0xFF);
+        return subVal == subAuthority0;
+    }
+
+    /**
+     * Writes this SID directly into the target ByteBuffer without allocating an intermediate byte[].
+     *
+     * @param buff target byte buffer.
+     */
+    void writeTo(final ByteBuffer buff) {
+        buff.put(revision);
+        buff.put((byte) (subAuthorities.size() & 0xFF));
+        if (identifierAuthority != null) {
+            buff.put(identifierAuthority);
+        } else {
+            buff.putShort((short) 0);
+            buff.putInt(0);
+        }
+        for (int i = 0, n = subAuthorities.size(); i < n; i++) {
+            final byte[] sub = subAuthorities.get(i);
+            buff.put(sub[3]);
+            buff.put(sub[2]);
+            buff.put(sub[1]);
+            buff.put(sub[0]);
+        }
     }
 
     /**
@@ -298,9 +410,9 @@ public class SID {
     }
 
     /**
-     * Adds sub-authority:a principal relative to the IdentifierAuthority.
+     * Adds sub-authority: a principal relative to the IdentifierAuthority.
      *
-     * @param sub sub-authority.
+     * @param sub sub-authority as 4-byte big-endian array.
      * @return the current SID instance.
      */
     public SID addSubAuthority(byte[] sub) {
@@ -313,26 +425,25 @@ public class SID {
     }
 
     /**
+     * Adds a 32-bit unsigned sub-authority value (RID).
+     *
+     * @param subAuthority 32-bit sub-authority value.
+     * @return the current SID instance.
+     */
+    public SID addSubAuthority(final long subAuthority) {
+        this.subAuthorities.add(NumberFacility.getUIntBytes(subAuthority));
+        return this;
+    }
+
+    /**
      * Serializes to byte array.
      *
      * @return serialized SID.
      */
     public byte[] toByteArray() {
-        final byte[] res = new byte[getSize()];
-        res[0] = revision;
-        res[1] = (byte) (subAuthorities.size() & 0xFF);
-        if (identifierAuthority != null) {
-            System.arraycopy(identifierAuthority, 0, res, 2, 6);
-        }
-        int offset = 8;
-        for (byte[] sub : subAuthorities) {
-            res[offset] = sub[3];
-            res[offset + 1] = sub[2];
-            res[offset + 2] = sub[1];
-            res[offset + 3] = sub[0];
-            offset += 4;
-        }
-        return res;
+        final ByteBuffer buff = ByteBuffer.allocate(getSize());
+        writeTo(buff);
+        return buff.array();
     }
 
     /**
