@@ -86,7 +86,7 @@ public class ACE {
     /**
      * Default constructor.
      */
-    ACE() {
+    public ACE() {
     }
 
     /**
@@ -101,7 +101,13 @@ public class ACE {
         return ace;
     }
 
-    private static boolean isObjectAceType(final AceType type) {
+    /**
+     * Checks whether the given AceType uses an Object-specific ACE wire structure.
+     *
+     * @param type ACE type.
+     * @return true if Object ACE type.
+     */
+    public static boolean isObjectAceType(final AceType type) {
         return type == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
                 || type == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE
                 || type == AceType.SYSTEM_AUDIT_OBJECT_ACE_TYPE
@@ -349,14 +355,18 @@ public class ACE {
      * where the AceSize field encompasses additional data for the callback ACEs types, that data is
      * implementation-specific. Otherwise, this additional data is not interpreted and MUST be ignored.
      *
-     * @return ACE size.
+     * @return ACE size (always a multiple of 4 bytes).
      */
     public int getSize() {
-        return 8 + (objectFlags == null ? 0 : 4)
-                + (objectType == null ? 0 : 16)
-                + (inheritedObjectType == null ? 0 : 16)
+        final boolean isObj = isObjectAceType(type);
+        final boolean hasObjType = isObj && objectType != null && objectType.length == 16;
+        final boolean hasInhObjType = isObj && inheritedObjectType != null && inheritedObjectType.length == 16;
+        final int appDataLen = applicationData == null ? 0 : (applicationData.length + 3) & ~3;
+        return 8 + (isObj ? 4 : 0)
+                + (hasObjType ? 16 : 0)
+                + (hasInhObjType ? 16 : 0)
                 + (sid == null ? 0 : sid.getSize())
-                + (applicationData == null ? 0 : applicationData.length);
+                + appDataLen;
     }
 
     /**
@@ -385,6 +395,27 @@ public class ACE {
     }
 
     /**
+     * Removes ACE flag.
+     *
+     * @param flag ACE flag to remove.
+     * @return true if the flag was present and removed.
+     * @see AceFlag
+     */
+    public boolean removeFlag(final AceFlag flag) {
+        return this.flags != null && this.flags.remove(flag);
+    }
+
+    /**
+     * Sets ACE flags list.
+     *
+     * @param flags list of ACE flags.
+     * @see AceFlag
+     */
+    public void setFlags(final List<AceFlag> flags) {
+        this.flags = flags == null ? new ArrayList<>() : new ArrayList<>(flags);
+    }
+
+    /**
      * Sets ACE rights.
      *
      * @param rights ACE rights.
@@ -406,25 +437,52 @@ public class ACE {
 
     /**
      * Sets object type, a GUID (16 bytes) that identifies a property set, property, extended right, or type of child
-     * object.
+     * object. Automatically updates {@link AceObjectFlags} accordingly.
      *
-     * @param objectType ACE object type.
+     * @param objectType ACE object type (16 bytes) or null.
      */
     public void setObjectType(final byte[] objectType) {
-        this.objectType = objectType == null || objectType.length == 0
-                ? null
-                : Arrays.copyOf(objectType, objectType.length);
+        if (objectType == null || objectType.length == 0) {
+            this.objectType = null;
+            if (this.objectFlags != null) {
+                this.objectFlags.getFlags().remove(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT);
+            }
+        } else {
+            if (objectType.length != 16) {
+                throw new IllegalArgumentException("ObjectType GUID must be 16 bytes");
+            }
+            this.objectType = Arrays.copyOf(objectType, 16);
+            if (this.objectFlags == null) {
+                this.objectFlags = new AceObjectFlags(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT);
+            } else {
+                this.objectFlags.addFlag(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT);
+            }
+        }
     }
 
     /**
      * Sets inherited object type, a GUID (16 bytes) that identifies the type of child object that can inherit the ACE.
+     * Automatically updates {@link AceObjectFlags} accordingly.
      *
-     * @param inheritedObjectType Inherited object type.
+     * @param inheritedObjectType Inherited object type (16 bytes) or null.
      */
     public void setInheritedObjectType(final byte[] inheritedObjectType) {
-        this.inheritedObjectType = inheritedObjectType == null || inheritedObjectType.length == 0
-                ? null
-                : Arrays.copyOf(inheritedObjectType, inheritedObjectType.length);
+        if (inheritedObjectType == null || inheritedObjectType.length == 0) {
+            this.inheritedObjectType = null;
+            if (this.objectFlags != null) {
+                this.objectFlags.getFlags().remove(AceObjectFlags.Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT);
+            }
+        } else {
+            if (inheritedObjectType.length != 16) {
+                throw new IllegalArgumentException("InheritedObjectType GUID must be 16 bytes");
+            }
+            this.inheritedObjectType = Arrays.copyOf(inheritedObjectType, 16);
+            if (this.objectFlags == null) {
+                this.objectFlags = new AceObjectFlags(AceObjectFlags.Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT);
+            } else {
+                this.objectFlags.addFlag(AceObjectFlags.Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT);
+            }
+        }
     }
 
     /**
@@ -437,8 +495,21 @@ public class ACE {
         this.sid = sid;
     }
 
+    private int computeEffectiveObjectFlagsMask() {
+        int mask = objectFlags == null ? 0 : (int) objectFlags.getOthers();
+        if (objectType != null && objectType.length == 16) {
+            mask |= AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT.getValue();
+        }
+        if (inheritedObjectType != null && inheritedObjectType.length == 16) {
+            mask |= AceObjectFlags.Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT.getValue();
+        }
+        return mask;
+    }
+
     /**
      * Writes this ACE directly into a little-endian ByteBuffer without intermediate array allocations.
+     * Ensures wire format consistency between AceType, AceObjectFlags, ObjectType/InheritedObjectType GUIDs,
+     * and 4-byte DWORD padding.
      *
      * @param buff target little-endian ByteBuffer.
      */
@@ -457,20 +528,26 @@ public class ACE {
         buff.putShort((short) size);
         buff.putInt(rights == null ? 0 : (int) rights.asUInt());
 
-        if (objectFlags != null) {
-            buff.putInt((int) objectFlags.asUInt());
-        }
-        if (objectType != null) {
-            buff.put(objectType);
-        }
-        if (inheritedObjectType != null) {
-            buff.put(inheritedObjectType);
+        if (isObjectAceType(type)) {
+            buff.putInt(computeEffectiveObjectFlagsMask());
+            if (objectType != null && objectType.length == 16) {
+                buff.put(objectType);
+            }
+            if (inheritedObjectType != null && inheritedObjectType.length == 16) {
+                buff.put(inheritedObjectType);
+            }
         }
         if (sid != null) {
             sid.writeTo(buff);
         }
-        if (applicationData != null) {
+        if (applicationData != null && applicationData.length > 0) {
             buff.put(applicationData);
+            final int rem = applicationData.length & 3;
+            if (rem != 0) {
+                for (int p = 4 - rem; p > 0; p--) {
+                    buff.put((byte) 0x00);
+                }
+            }
         }
     }
 

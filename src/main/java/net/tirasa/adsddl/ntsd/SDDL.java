@@ -18,7 +18,9 @@ package net.tirasa.adsddl.ntsd;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
+import net.tirasa.adsddl.ntsd.data.SddlControlFlag;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,6 +124,14 @@ public class SDDL {
      * is set.
      */
     private ACL sacl;
+
+    /**
+     * Default constructor creating an empty self-relative SECURITY_DESCRIPTOR with revision 1.
+     */
+    public SDDL() {
+        this.revision = 0x01;
+        this.controlFlags = SddlControlFlag.toBytes(SddlControlFlag.SE_SELF_RELATIVE.getValue());
+    }
 
     /**
      * Constructor.
@@ -278,12 +288,99 @@ public class SDDL {
     }
 
     /**
+     * Sets revision of the SECURITY_DESCRIPTOR structure (must be 0x01).
+     *
+     * @param revision revision byte.
+     * @return the current SDDL instance.
+     */
+    public SDDL setRevision(final byte revision) {
+        this.revision = revision;
+        return this;
+    }
+
+    /**
      * Gets control.
      *
      * @return An unsigned 16-bit field that specifies control access bit flags.
      */
     public byte[] getControlFlags() {
         return controlFlags;
+    }
+
+    /**
+     * Sets raw 2-byte control flags (high byte at index 0, low byte at index 1).
+     *
+     * @param controlFlags 2-byte control flags array.
+     * @return the current SDDL instance.
+     */
+    public SDDL setControlFlags(final byte[] controlFlags) {
+        if (controlFlags == null || controlFlags.length != 2) {
+            throw new IllegalArgumentException("Control flags must be a 2-byte array");
+        }
+        this.controlFlags = Arrays.copyOf(controlFlags, 2);
+        return this;
+    }
+
+    /**
+     * Gets parsed control flags as a list of {@link SddlControlFlag}.
+     *
+     * @return active control flags.
+     */
+    public List<SddlControlFlag> getParsedControlFlags() {
+        return SddlControlFlag.parseValue(controlFlags);
+    }
+
+    /**
+     * Checks whether a specific {@link SddlControlFlag} is set.
+     *
+     * @param flag control flag to check.
+     * @return true if set.
+     */
+    public boolean hasControlFlag(final SddlControlFlag flag) {
+        if (flag == null || controlFlags == null || controlFlags.length < 2) {
+            return false;
+        }
+        final int mask = ((controlFlags[0] & 0xFF) << 8) | (controlFlags[1] & 0xFF);
+        return (mask & flag.getValue()) == flag.getValue();
+    }
+
+    /**
+     * Adds one or more {@link SddlControlFlag} bits to this security descriptor.
+     *
+     * @param flags flags to set.
+     * @return the current SDDL instance.
+     */
+    public SDDL addControlFlags(final SddlControlFlag... flags) {
+        int mask = (controlFlags == null || controlFlags.length < 2)
+                ? SddlControlFlag.SE_SELF_RELATIVE.getValue()
+                : (((controlFlags[0] & 0xFF) << 8) | (controlFlags[1] & 0xFF));
+        for (SddlControlFlag flag : flags) {
+            if (flag != null) {
+                mask |= flag.getValue();
+            }
+        }
+        this.controlFlags = SddlControlFlag.toBytes(mask);
+        return this;
+    }
+
+    /**
+     * Removes one or more {@link SddlControlFlag} bits from this security descriptor.
+     *
+     * @param flags flags to clear.
+     * @return the current SDDL instance.
+     */
+    public SDDL removeControlFlags(final SddlControlFlag... flags) {
+        if (controlFlags == null || controlFlags.length < 2) {
+            return this;
+        }
+        int mask = ((controlFlags[0] & 0xFF) << 8) | (controlFlags[1] & 0xFF);
+        for (SddlControlFlag flag : flags) {
+            if (flag != null) {
+                mask &= ~flag.getValue();
+            }
+        }
+        this.controlFlags = SddlControlFlag.toBytes(mask);
+        return this;
     }
 
     /**
@@ -296,12 +393,34 @@ public class SDDL {
     }
 
     /**
+     * Sets owner SID.
+     *
+     * @param owner owner SID.
+     * @return the current SDDL instance.
+     */
+    public SDDL setOwner(final SID owner) {
+        this.owner = owner;
+        return this;
+    }
+
+    /**
      * Gets group.
      *
      * @return The SID of the group of the object.
      */
     public SID getGroup() {
         return group;
+    }
+
+    /**
+     * Sets group SID.
+     *
+     * @param group group SID.
+     * @return the current SDDL instance.
+     */
+    public SDDL setGroup(final SID group) {
+        this.group = group;
+        return this;
     }
 
     /**
@@ -314,6 +433,22 @@ public class SDDL {
     }
 
     /**
+     * Sets DACL and updates the {@link SddlControlFlag#SE_DACL_PRESENT} control flag.
+     *
+     * @param dacl DACL.
+     * @return the current SDDL instance.
+     */
+    public SDDL setDacl(final ACL dacl) {
+        this.dacl = dacl;
+        if (dacl != null) {
+            addControlFlags(SddlControlFlag.SE_DACL_PRESENT);
+        } else {
+            removeControlFlags(SddlControlFlag.SE_DACL_PRESENT);
+        }
+        return this;
+    }
+
+    /**
      * Gets SACL.
      *
      * @return The SACL of the object.
@@ -323,7 +458,25 @@ public class SDDL {
     }
 
     /**
+     * Sets SACL and updates the {@link SddlControlFlag#SE_SACL_PRESENT} control flag.
+     *
+     * @param sacl SACL.
+     * @return the current SDDL instance.
+     */
+    public SDDL setSacl(final ACL sacl) {
+        this.sacl = sacl;
+        if (sacl != null) {
+            addControlFlags(SddlControlFlag.SE_SACL_PRESENT);
+        } else {
+            removeControlFlags(SddlControlFlag.SE_SACL_PRESENT);
+        }
+        return this;
+    }
+
+    /**
      * Serializes SDDL as byte array using a single contiguous ByteBuffer without intermediate byte[] allocations.
+     * Automatically ensures {@link SddlControlFlag#SE_SELF_RELATIVE}, {@link SddlControlFlag#SE_DACL_PRESENT},
+     * and {@link SddlControlFlag#SE_SACL_PRESENT} match the actual presence of DACL and SACL.
      *
      * @return SDDL as byte array.
      */
@@ -331,12 +484,21 @@ public class SDDL {
         final ByteBuffer buff = ByteBuffer.allocate(getSize()).order(ByteOrder.LITTLE_ENDIAN);
 
         // add revision & reserved
-        buff.put(revision);
+        buff.put(revision == 0 ? (byte) 0x01 : revision);
         buff.put((byte) 0x00);
 
-        // add control flags
-        buff.put(controlFlags[1]);
-        buff.put(controlFlags[0]);
+        // synchronize control flags with actual presence of SACL/DACL
+        int ctrlMask = (controlFlags == null || controlFlags.length < 2)
+                ? SddlControlFlag.SE_SELF_RELATIVE.getValue()
+                : (((controlFlags[0] & 0xFF) << 8) | (controlFlags[1] & 0xFF));
+        ctrlMask |= SddlControlFlag.SE_SELF_RELATIVE.getValue();
+        if (dacl != null) {
+            ctrlMask |= SddlControlFlag.SE_DACL_PRESENT.getValue();
+        }
+        if (sacl != null) {
+            ctrlMask |= SddlControlFlag.SE_SACL_PRESENT.getValue();
+        }
+        buff.putShort((short) ctrlMask);
 
         int nextAvailablePosition = 20;
 

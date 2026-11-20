@@ -181,6 +181,43 @@ public class BasicTest {
     }
 
     @Test
+    public void buildFullSddlFromScratch() {
+        final SDDL sddl = new SDDL()
+                .setOwner(SID.parse("S-1-5-32-544"))
+                .setGroup(SID.parse("S-1-5-18"))
+                .addControlFlags(
+                        net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PROTECTED,
+                        net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_AUTO_INHERITED);
+
+        final net.tirasa.adsddl.ntsd.ACL dacl = new net.tirasa.adsddl.ntsd.ACL();
+        final net.tirasa.adsddl.ntsd.ACE ace = new net.tirasa.adsddl.ntsd.ACE();
+        ace.setType(net.tirasa.adsddl.ntsd.data.AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE);
+        ace.addFlag(net.tirasa.adsddl.ntsd.data.AceFlag.CONTAINER_INHERIT_ACE);
+        ace.setRights(new net.tirasa.adsddl.ntsd.data.AceRights()
+                .addObjectRight(net.tirasa.adsddl.ntsd.data.AceRights.ObjectRight.CR)
+                .addObjectRight(net.tirasa.adsddl.ntsd.data.AceRights.ObjectRight.WP));
+        // setObjectType automatically syncs AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT
+        ace.setObjectType(GUID.getGuidAsByteArray(SDDLHelper.UCP_OBJECT_GUID));
+        ace.setSid(SID.parse("S-1-5-10"));
+        // non-4-byte-multiple applicationData is automatically padded to DWORD boundary
+        ace.setApplicationData(new byte[] { 0x01, 0x02, 0x03 });
+
+        dacl.addAceCanonical(ace);
+        sddl.setDacl(dacl);
+
+        assertTrue(sddl.hasControlFlag(net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PRESENT));
+        assertTrue(sddl.hasControlFlag(net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PROTECTED));
+        assertEquals(0, ace.getSize() % 4);
+
+        final SDDL roundTrip = new SDDL(sddl.toByteArray());
+        assertEquals(SID.parse("S-1-5-32-544"), roundTrip.getOwner());
+        assertEquals(SID.parse("S-1-5-18"), roundTrip.getGroup());
+        assertEquals(net.tirasa.adsddl.ntsd.data.AclRevision.ACL_REVISION_DS, roundTrip.getDacl().getRevision());
+        assertEquals(1, roundTrip.getDacl().getAceCount());
+        assertTrue(roundTrip.hasControlFlag(net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PROTECTED));
+    }
+
+    @Test
     public void trim() {
         int src = 0x00010200;
         byte[] actual = NumberFacility.leftTrim(NumberFacility.getBytes(src));

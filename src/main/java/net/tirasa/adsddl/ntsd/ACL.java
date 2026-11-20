@@ -74,14 +74,26 @@ public class ACL {
      * revision 0x04 are applicable only to directory service objects. An AceType of 0x11 is used for SACLs but not for
      * DACLs.
      */
-    private AclRevision revision;
+    private AclRevision revision = AclRevision.ACL_REVISION_DS;
 
     private final List<ACE> aces = new ArrayList<>();
 
     /**
-     * Protected constructor.
+     * Public constructor.
      */
-    ACL() {
+    public ACL() {
+    }
+
+    /**
+     * Creates a new ACL instance with the given revision.
+     *
+     * @param revision ACL revision.
+     * @return new ACL instance.
+     */
+    public static ACL newInstance(final AclRevision revision) {
+        final ACL acl = new ACL();
+        acl.setRevision(revision);
+        return acl;
     }
 
     /**
@@ -146,6 +158,29 @@ public class ACL {
      */
     public AclRevision getRevision() {
         return revision;
+    }
+
+    /**
+     * Sets ACL revision.
+     *
+     * @param revision ACL revision.
+     * @return the current ACL instance.
+     */
+    public ACL setRevision(final AclRevision revision) {
+        this.revision = revision;
+        return this;
+    }
+
+    private AclRevision getEffectiveRevision() {
+        for (int i = 0, n = aces.size(); i < n; i++) {
+            final ACE ace = aces.get(i);
+            if (ace != null && ACE.isObjectAceType(ace.getType())) {
+                return AclRevision.ACL_REVISION_DS;
+            }
+        }
+        return (revision == null || revision == AclRevision.UNEXPECTED)
+                ? AclRevision.ACL_REVISION
+                : revision;
     }
 
     /**
@@ -267,13 +302,15 @@ public class ACL {
 
     /**
      * Writes this ACL directly into a little-endian ByteBuffer without intermediate array allocations.
+     * Automatically upgrades revision to {@link AclRevision#ACL_REVISION_DS} if any Object ACE is present.
      *
      * @param buff target little-endian ByteBuffer.
      */
     void writeTo(final ByteBuffer buff) {
         final int size = getSize();
+        final AclRevision effectiveRev = getEffectiveRevision();
 
-        buff.put(revision == null ? AclRevision.UNEXPECTED.getValue() : revision.getValue());
+        buff.put(effectiveRev.getValue());
         buff.put((byte) 0x00);
         buff.putShort((short) size);
         buff.putShort((short) getAceCount());

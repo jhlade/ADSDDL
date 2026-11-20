@@ -67,6 +67,8 @@ public class SDDLHelper {
 
     /**
      * Check if user cannot change password.
+     * Evaluates the DACL in order so that compatible behavior across Windows Server 2008-2025 (including RSAT GUI
+     * which may only re-add the Everyone allow ACE when unchecking) and Samba 4 is guaranteed.
      *
      * @param sddl SDDL.
      * @return <tt>true</tt> if user cannot change password; <tt>false</tt> otherwise.
@@ -76,23 +78,34 @@ public class SDDLHelper {
             return false;
         }
 
+        Boolean everyoneAllowed = null;
+        Boolean selfAllowed = null;
+
         final List<ACE> aces = sddl.getDacl().getAces();
         for (int i = 0, n = aces.size(); i < n; i++) {
             final ACE ace = aces.get(i);
+            final AceType type = ace.getType();
 
-            if (ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE
+            if ((type == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE
+                    || type == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE)
+                    && (ace.getRights() == null
+                            || (ace.getRights().asUInt() & AceRights.ObjectRight.CR.getValue()) != 0)
                     && ace.getObjectFlags() != null
                     && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)
                     && Arrays.equals(ace.getObjectType(), UCP_OBJECT_GUID_BYTES)) {
 
                 final SID sid = ace.getSid();
-                if (isEveryoneSid(sid) || isSelfSid(sid)) {
-                    return true;
+                // First matching ACE in DACL order wins for each trustee
+                if (everyoneAllowed == null && isEveryoneSid(sid)) {
+                    everyoneAllowed = (type == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE);
+                } else if (selfAllowed == null && isSelfSid(sid)) {
+                    selfAllowed = (type == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE);
                 }
             }
         }
 
-        return false;
+        // If either Everyone or Self is explicitly denied first in DACL evaluation order, user cannot change password
+        return Boolean.FALSE.equals(everyoneAllowed) || Boolean.FALSE.equals(selfAllowed);
     }
 
     /**
@@ -110,11 +123,12 @@ public class SDDLHelper {
         final boolean deny = Boolean.TRUE.equals(cannot);
         final AceType type = deny ? AceType.ACCESS_DENIED_OBJECT_ACE_TYPE : AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE;
 
+        // Remove all existing UCP ACEs for Everyone and Self (including duplicates left by external tools)
         ACE everyone = null;
         ACE self = null;
 
         final List<ACE> aces = sddl.getDacl().getAces();
-        for (int i = 0, n = aces.size(); (everyone == null || self == null) && i < n; i++) {
+        for (int i = 0; i < aces.size(); i++) {
             final ACE ace = aces.get(i);
 
             if ((ace.getType() == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
@@ -124,23 +138,27 @@ public class SDDLHelper {
                     && Arrays.equals(ace.getObjectType(), UCP_OBJECT_GUID_BYTES)) {
 
                 final SID sid = ace.getSid();
-                if (everyone == null && isEveryoneSid(sid)) {
-                    everyone = ace;
-                } else if (self == null && isSelfSid(sid)) {
-                    self = ace;
+                if (isEveryoneSid(sid)) {
+                    aces.remove(i--);
+                    if (everyone == null) {
+                        everyone = ace;
+                    }
+                } else if (isSelfSid(sid)) {
+                    aces.remove(i--);
+                    if (self == null) {
+                        self = ace;
+                    }
                 }
             }
         }
 
         if (everyone != null) {
-            aces.remove(everyone);
             everyone.setType(type);
         } else {
             everyone = createUcpAce(type, EVERYONE_AUTHORITY, EVERYONE_SUB_AUTHORITY);
         }
 
         if (self != null) {
-            aces.remove(self);
             self.setType(type);
         } else {
             self = createUcpAce(type, SELF_AUTHORITY, SELF_SUB_AUTHORITY);
