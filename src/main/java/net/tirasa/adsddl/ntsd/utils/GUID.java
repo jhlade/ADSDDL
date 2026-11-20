@@ -27,6 +27,8 @@ import java.util.UUID;
  */
 public class GUID {
 
+    private static final char[] HEX_LOWER = "0123456789abcdef".toCharArray();
+
     /**
      * Gets GUID as string.
      *
@@ -34,31 +36,32 @@ public class GUID {
      * @return GUID as string.
      */
     public static String getGuidAsString(byte[] GUID) {
-        final StringBuilder res = new StringBuilder();
+        if (GUID == null || GUID.length < 16) {
+            throw new IllegalArgumentException("GUID must be 16 bytes");
+        }
+        final char[] chars = new char[36];
+        writeHexByte(chars, 0, GUID[3]);
+        writeHexByte(chars, 2, GUID[2]);
+        writeHexByte(chars, 4, GUID[1]);
+        writeHexByte(chars, 6, GUID[0]);
+        chars[8] = '-';
+        writeHexByte(chars, 9, GUID[5]);
+        writeHexByte(chars, 11, GUID[4]);
+        chars[13] = '-';
+        writeHexByte(chars, 14, GUID[7]);
+        writeHexByte(chars, 16, GUID[6]);
+        chars[18] = '-';
+        writeHexByte(chars, 19, GUID[8]);
+        writeHexByte(chars, 21, GUID[9]);
+        chars[23] = '-';
+        writeHexByte(chars, 24, GUID[10]);
+        writeHexByte(chars, 26, GUID[11]);
+        writeHexByte(chars, 28, GUID[12]);
+        writeHexByte(chars, 30, GUID[13]);
+        writeHexByte(chars, 32, GUID[14]);
+        writeHexByte(chars, 34, GUID[15]);
 
-        res.append(AddLeadingZero((int) GUID[3] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[2] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[1] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[0] & 0xFF));
-        res.append("-");
-        res.append(AddLeadingZero((int) GUID[5] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[4] & 0xFF));
-        res.append("-");
-        res.append(AddLeadingZero((int) GUID[7] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[6] & 0xFF));
-        res.append("-");
-        res.append(AddLeadingZero((int) GUID[8] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[9] & 0xFF));
-        res.append("-");
-        res.append(AddLeadingZero((int) GUID[10] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[11] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[12] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[13] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[14] & 0xFF));
-        res.append(AddLeadingZero((int) GUID[15] & 0xFF));
-
-        return res.toString();
-
+        return new String(chars);
     }
 
     /**
@@ -74,7 +77,7 @@ public class GUID {
         buff.putLong(uuid.getMostSignificantBits());
         buff.putLong(uuid.getLeastSignificantBits());
 
-        byte[] res = new byte[] {
+        return new byte[] {
             buff.get(3),
             buff.get(2),
             buff.get(1),
@@ -90,12 +93,12 @@ public class GUID {
             buff.get(12),
             buff.get(13),
             buff.get(14),
-            buff.get(15), };
-
-        return res;
+            buff.get(15) };
     }
 
-    private static String AddLeadingZero(int k) {
-        return (k <= 0xF) ? "0" + Integer.toHexString(k) : Integer.toHexString(k);
+    private static void writeHexByte(final char[] dst, final int offset, final byte b) {
+        int v = b & 0xFF;
+        dst[offset] = HEX_LOWER[v >>> 4];
+        dst[offset + 1] = HEX_LOWER[v & 0x0F];
     }
 }

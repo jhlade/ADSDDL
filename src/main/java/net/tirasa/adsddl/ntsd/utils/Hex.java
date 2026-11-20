@@ -20,6 +20,8 @@ package net.tirasa.adsddl.ntsd.utils;
  */
 public class Hex {
 
+    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+
     /**
      * Gets hex string corresponding to the given byte array from "<tt>from</tt>" position to "<tt>to's</tt>"
      *
@@ -29,11 +31,17 @@ public class Hex {
      * @return hex string.
      */
     public static String get(byte[] bytes, int from, int to) {
-        final StringBuilder bld = new StringBuilder();
-        for (int i = from; i < to; i++) {
-            bld.append(Hex.get(bytes[i]));
+        if (bytes == null || from >= to) {
+            return "";
         }
-        return bld.toString();
+        final char[] hexChars = new char[(to - from) * 2];
+        for (int i = from; i < to; i++) {
+            int v = bytes[i] & 0xFF;
+            int idx = (i - from) * 2;
+            hexChars[idx] = HEX_ARRAY[v >>> 4];
+            hexChars[idx + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
     }
 
     /**
@@ -43,11 +51,7 @@ public class Hex {
      * @return hex string.
      */
     public static String get(byte... bytes) {
-        final StringBuilder bld = new StringBuilder();
-        for (byte b : bytes) {
-            bld.append(Hex.get(b));
-        }
-        return bld.toString();
+        return bytes == null ? "" : get(bytes, 0, bytes.length);
     }
 
     /**
@@ -57,11 +61,18 @@ public class Hex {
      * @return escaped hex string
      */
     public static String getEscaped(byte... bytes) {
-        final StringBuilder bld = new StringBuilder();
-        for (byte b : bytes) {
-            bld.append("\\").append(Hex.get(b));
+        if (bytes == null || bytes.length == 0) {
+            return "";
         }
-        return bld.toString();
+        final char[] hexChars = new char[bytes.length * 3];
+        for (int i = 0; i < bytes.length; i++) {
+            int v = bytes[i] & 0xFF;
+            int idx = i * 3;
+            hexChars[idx] = '\\';
+            hexChars[idx + 1] = HEX_ARRAY[v >>> 4];
+            hexChars[idx + 2] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
     }
 
     /**
@@ -71,7 +82,8 @@ public class Hex {
      * @return hex string.
      */
     public static String get(byte b) {
-        return String.format("%02X", b);
+        int v = b & 0xFF;
+        return new String(new char[] { HEX_ARRAY[v >>> 4], HEX_ARRAY[v & 0x0F] });
     }
 
     /**
@@ -81,11 +93,12 @@ public class Hex {
      * @return reversed byte array.
      */
     public static byte[] reverse(byte... bytes) {
+        if (bytes == null) {
+            return null;
+        }
         byte[] res = new byte[bytes.length];
-        int j = 0;
-        for (int i = bytes.length - 1; i >= 0; i--) {
-            res[j] = bytes[i];
-            j++;
+        for (int i = 0, j = bytes.length - 1; j >= 0; i++, j--) {
+            res[i] = bytes[j];
         }
         return res;
     }

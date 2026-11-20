@@ -15,7 +15,6 @@
  */
 package net.tirasa.adsddl.ntsd.utils;
 
-import java.nio.ByteBuffer;
 import java.security.InvalidParameterException;
 import java.util.Arrays;
 
@@ -31,7 +30,12 @@ public class NumberFacility {
      * @return byte array.
      */
     public static byte[] getUIntBytes(final long value) {
-        return Arrays.copyOfRange(ByteBuffer.allocate(8).putLong(value).array(), 4, 8);
+        return new byte[] {
+            (byte) (value >>> 24),
+            (byte) (value >>> 16),
+            (byte) (value >>> 8),
+            (byte) value
+        };
     }
 
     /**
@@ -41,18 +45,43 @@ public class NumberFacility {
      * @return byte array.
      */
     public static byte[] getBytes(final int value) {
-        return ByteBuffer.allocate(4).putInt(value).array();
+        return new byte[] {
+            (byte) (value >>> 24),
+            (byte) (value >>> 16),
+            (byte) (value >>> 8),
+            (byte) value
+        };
     }
-    
+
     /**
-     * Gets byte array from integer.
+     * Gets byte array from integer in big-endian order with the given length.
      *
      * @param value integer.
      * @param length array size.
      * @return byte array.
      */
     public static byte[] getBytes(final int value, final int length) {
-        return ByteBuffer.allocate(length).putInt(value).array();
+        return getBytes((long) value & 0xFFFFFFFFL, length);
+    }
+
+    /**
+     * Gets byte array from long in big-endian order with the given length.
+     *
+     * @param value long value.
+     * @param length array size.
+     * @return byte array.
+     */
+    public static byte[] getBytes(final long value, final int length) {
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must be non-negative");
+        }
+        final byte[] res = new byte[length];
+        long v = value;
+        for (int i = length - 1; i >= 0 && v != 0; i--) {
+            res[i] = (byte) (v & 0xFF);
+            v >>>= 8;
+        }
+        return res;
     }
 
     /**
