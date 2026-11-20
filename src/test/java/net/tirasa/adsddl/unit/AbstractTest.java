@@ -18,6 +18,8 @@ package net.tirasa.adsddl.unit;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import cz.jhlade.adsddl.data.AdExtendedRight;
+import cz.jhlade.adsddl.data.WellKnownSid;
 import java.io.IOException;
 import java.util.Arrays;
 import net.tirasa.adsddl.ntsd.ACE;
@@ -31,7 +33,6 @@ import net.tirasa.adsddl.ntsd.data.AceType;
 import net.tirasa.adsddl.ntsd.utils.GUID;
 import net.tirasa.adsddl.ntsd.utils.Hex;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
-import net.tirasa.adsddl.ntsd.utils.SDDLHelper;
 import org.junit.jupiter.api.BeforeAll;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +79,7 @@ public abstract class AbstractTest {
             if ((ace.getType() == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
                     || ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE)
                     && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)) {
-                if (GUID.getGuidAsString(ace.getObjectType()).equals(SDDLHelper.UCP_OBJECT_GUID)) {
+                if (AdExtendedRight.USER_CHANGE_PASSWORD.matches(ace.getObjectType())) {
                     found = true;
                 }
             }
@@ -101,7 +102,7 @@ public abstract class AbstractTest {
             if ((ace.getType() == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
                     || ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE)
                     && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)) {
-                if (GUID.getGuidAsString(ace.getObjectType()).equals(SDDLHelper.UCP_OBJECT_GUID)) {
+                if (AdExtendedRight.USER_CHANGE_PASSWORD.matches(ace.getObjectType())) {
                     if (ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE) {
                         ace.setType(AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE);
                     } else {

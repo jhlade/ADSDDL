@@ -21,6 +21,7 @@
 */
 package net.tirasa.adsddl.ntsd.dacl;
 
+import cz.jhlade.adsddl.data.WellKnownSid;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -73,7 +74,7 @@ public class DACLAssertor {
     /**
      * SID of the 'Everyone' AD group.
      */
-    private static final SID EVERYONE_SID = SID.parse("S-1-1-0");
+    private static final SID EVERYONE_SID = WellKnownSid.EVERYONE.toSid();
 
     /**
      * LDAP search filter for the object whose DACL will be evaluated.

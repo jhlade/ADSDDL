@@ -15,6 +15,9 @@
  */
 package net.tirasa.adsddl.ntsd;
 
+import cz.jhlade.adsddl.data.AdExtendedRight;
+import cz.jhlade.adsddl.data.AdSchemaGuid;
+import cz.jhlade.adsddl.data.WellKnownSid;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
@@ -460,6 +463,24 @@ public class ACE {
     }
 
     /**
+     * Sets object type from an {@link AdExtendedRight}. Automatically updates {@link AceObjectFlags}.
+     *
+     * @param extendedRight AD extended right.
+     */
+    public void setObjectType(final AdExtendedRight extendedRight) {
+        setObjectType(extendedRight == null ? null : extendedRight.getGuidBytes());
+    }
+
+    /**
+     * Sets object type from an {@link AdSchemaGuid}. Automatically updates {@link AceObjectFlags}.
+     *
+     * @param schemaGuid AD schema class, attribute, or property set GUID.
+     */
+    public void setObjectType(final AdSchemaGuid schemaGuid) {
+        setObjectType(schemaGuid == null ? null : schemaGuid.getGuidBytes());
+    }
+
+    /**
      * Sets inherited object type, a GUID (16 bytes) that identifies the type of child object that can inherit the ACE.
      * Automatically updates {@link AceObjectFlags} accordingly.
      *
@@ -485,6 +506,15 @@ public class ACE {
     }
 
     /**
+     * Sets inherited object type from an {@link AdSchemaGuid}. Automatically updates {@link AceObjectFlags}.
+     *
+     * @param schemaGuid AD schema class GUID.
+     */
+    public void setInheritedObjectType(final AdSchemaGuid schemaGuid) {
+        setInheritedObjectType(schemaGuid == null ? null : schemaGuid.getGuidBytes());
+    }
+
+    /**
      * Sets the SID of a trustee.
      *
      * @param sid SID of the trustee.
@@ -492,6 +522,15 @@ public class ACE {
      */
     public void setSid(final SID sid) {
         this.sid = sid;
+    }
+
+    /**
+     * Sets the SID of a trustee from a universal/built-in {@link WellKnownSid}.
+     *
+     * @param wellKnownSid well-known SID.
+     */
+    public void setSid(final WellKnownSid wellKnownSid) {
+        this.sid = wellKnownSid == null ? null : wellKnownSid.toSid();
     }
 
     private int computeEffectiveObjectFlagsMask() {

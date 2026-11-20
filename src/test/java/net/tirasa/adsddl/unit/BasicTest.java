@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import cz.jhlade.adsddl.data.AdExtendedRight;
+import cz.jhlade.adsddl.data.WellKnownSid;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -29,6 +31,7 @@ import java.util.logging.Logger;
 import net.tirasa.adsddl.ntsd.SDDL;
 import net.tirasa.adsddl.ntsd.SID;
 import net.tirasa.adsddl.ntsd.controls.DirSyncControl;
+import net.tirasa.adsddl.ntsd.data.SddlControlFlag;
 import net.tirasa.adsddl.ntsd.utils.GUID;
 import net.tirasa.adsddl.ntsd.utils.Hex;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
@@ -183,11 +186,11 @@ public class BasicTest {
     @Test
     public void buildFullSddlFromScratch() {
         final SDDL sddl = new SDDL()
-                .setOwner(SID.parse("S-1-5-32-544"))
-                .setGroup(SID.parse("S-1-5-18"))
+                .setOwner(WellKnownSid.BUILTIN_ADMINISTRATORS.toSid())
+                .setGroup(WellKnownSid.LOCAL_SYSTEM.toSid())
                 .addControlFlags(
-                        net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PROTECTED,
-                        net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_AUTO_INHERITED);
+                        SddlControlFlag.SE_DACL_PROTECTED,
+                        SddlControlFlag.SE_DACL_AUTO_INHERITED);
 
         final net.tirasa.adsddl.ntsd.ACL dacl = new net.tirasa.adsddl.ntsd.ACL();
         final net.tirasa.adsddl.ntsd.ACE ace = new net.tirasa.adsddl.ntsd.ACE();
@@ -196,25 +199,25 @@ public class BasicTest {
         ace.setRights(new net.tirasa.adsddl.ntsd.data.AceRights()
                 .addObjectRight(net.tirasa.adsddl.ntsd.data.AceRights.ObjectRight.CR)
                 .addObjectRight(net.tirasa.adsddl.ntsd.data.AceRights.ObjectRight.WP));
-        // setObjectType automatically syncs AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT
-        ace.setObjectType(GUID.getGuidAsByteArray(SDDLHelper.UCP_OBJECT_GUID));
-        ace.setSid(SID.parse("S-1-5-10"));
+        // setObjectType(AdExtendedRight) automatically syncs AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT
+        ace.setObjectType(AdExtendedRight.USER_CHANGE_PASSWORD);
+        ace.setSid(WellKnownSid.PRINCIPAL_SELF);
         // non-4-byte-multiple applicationData is automatically padded to DWORD boundary
         ace.setApplicationData(new byte[] { 0x01, 0x02, 0x03 });
 
         dacl.addAceCanonical(ace);
         sddl.setDacl(dacl);
 
-        assertTrue(sddl.hasControlFlag(net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PRESENT));
-        assertTrue(sddl.hasControlFlag(net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PROTECTED));
+        assertTrue(sddl.hasControlFlag(SddlControlFlag.SE_DACL_PRESENT));
+        assertTrue(sddl.hasControlFlag(SddlControlFlag.SE_DACL_PROTECTED));
         assertEquals(0, ace.getSize() % 4);
 
         final SDDL roundTrip = new SDDL(sddl.toByteArray());
-        assertEquals(SID.parse("S-1-5-32-544"), roundTrip.getOwner());
-        assertEquals(SID.parse("S-1-5-18"), roundTrip.getGroup());
+        assertEquals(WellKnownSid.BUILTIN_ADMINISTRATORS.toSid(), roundTrip.getOwner());
+        assertEquals(WellKnownSid.LOCAL_SYSTEM.toSid(), roundTrip.getGroup());
         assertEquals(net.tirasa.adsddl.ntsd.data.AclRevision.ACL_REVISION_DS, roundTrip.getDacl().getRevision());
         assertEquals(1, roundTrip.getDacl().getAceCount());
-        assertTrue(roundTrip.hasControlFlag(net.tirasa.adsddl.ntsd.data.SddlControlFlag.SE_DACL_PROTECTED));
+        assertTrue(roundTrip.hasControlFlag(SddlControlFlag.SE_DACL_PROTECTED));
     }
 
     @Test

@@ -15,7 +15,8 @@
  */
 package net.tirasa.adsddl.ntsd.utils;
 
-import java.util.Arrays;
+import cz.jhlade.adsddl.data.AdExtendedRight;
+import cz.jhlade.adsddl.data.WellKnownSid;
 import java.util.List;
 import net.tirasa.adsddl.ntsd.ACE;
 import net.tirasa.adsddl.ntsd.SDDL;
@@ -33,37 +34,27 @@ public class SDDLHelper {
     /**
      * User cannot change password GUID.
      */
-    public static final String UCP_OBJECT_GUID = "ab721a53-1e2f-11d0-9819-00aa0040529b";
+    public static final String UCP_OBJECT_GUID = AdExtendedRight.USER_CHANGE_PASSWORD.getGuidString();
 
     /**
      * Well-known SID string for Everyone (World).
      */
-    public static final String EVERYONE_SID_STRING = "S-1-1-0";
+    public static final String EVERYONE_SID_STRING = WellKnownSid.EVERYONE.getSidString();
 
     /**
      * Well-known SID string for Principal Self.
      */
-    public static final String SELF_SID_STRING = "S-1-5-10";
+    public static final String SELF_SID_STRING = WellKnownSid.PRINCIPAL_SELF.getSidString();
 
     /**
      * Well-known SID string for Authenticated Users.
      */
-    public static final String AUTHENTICATED_USERS_SID_STRING = "S-1-5-11";
+    public static final String AUTHENTICATED_USERS_SID_STRING = WellKnownSid.AUTHENTICATED_USERS.getSidString();
 
     /**
      * Well-known SID string for Local System.
      */
-    public static final String SYSTEM_SID_STRING = "S-1-5-18";
-
-    private static final byte[] UCP_OBJECT_GUID_BYTES = GUID.getGuidAsByteArray(UCP_OBJECT_GUID);
-
-    private static final byte[] EVERYONE_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
-
-    private static final byte[] EVERYONE_SUB_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x00 };
-
-    private static final byte[] SELF_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 };
-
-    private static final byte[] SELF_SUB_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x0a };
+    public static final String SYSTEM_SID_STRING = WellKnownSid.LOCAL_SYSTEM.getSidString();
 
     /**
      * Check if user cannot change password.
@@ -92,7 +83,7 @@ public class SDDLHelper {
                             || (ace.getRights().asUInt() & AceRights.ObjectRight.CR.getValue()) != 0)
                     && ace.getObjectFlags() != null
                     && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)
-                    && Arrays.equals(ace.getObjectType(), UCP_OBJECT_GUID_BYTES)) {
+                    && AdExtendedRight.USER_CHANGE_PASSWORD.matches(ace.getObjectType())) {
 
                 final SID sid = ace.getSid();
                 // First matching ACE in DACL order wins for each trustee
@@ -135,7 +126,7 @@ public class SDDLHelper {
                     || ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE)
                     && ace.getObjectFlags() != null
                     && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)
-                    && Arrays.equals(ace.getObjectType(), UCP_OBJECT_GUID_BYTES)) {
+                    && AdExtendedRight.USER_CHANGE_PASSWORD.matches(ace.getObjectType())) {
 
                 final SID sid = ace.getSid();
                 if (isEveryoneSid(sid)) {
@@ -155,13 +146,13 @@ public class SDDLHelper {
         if (everyone != null) {
             everyone.setType(type);
         } else {
-            everyone = createUcpAce(type, EVERYONE_AUTHORITY, EVERYONE_SUB_AUTHORITY);
+            everyone = createUcpAce(type, WellKnownSid.EVERYONE);
         }
 
         if (self != null) {
             self.setType(type);
         } else {
-            self = createUcpAce(type, SELF_AUTHORITY, SELF_SUB_AUTHORITY);
+            self = createUcpAce(type, WellKnownSid.PRINCIPAL_SELF);
         }
 
         sddl.getDacl().addAceCanonical(everyone);
@@ -190,14 +181,12 @@ public class SDDLHelper {
         return sid != null && sid.matchesSingleSubAuthority(0, 5, 10);
     }
 
-    private static ACE createUcpAce(final AceType type, final byte[] authority, final byte[] subAuthority) {
+    private static ACE createUcpAce(final AceType type, final WellKnownSid wellKnownSid) {
         final ACE ace = ACE.newInstance(type);
         ace.setObjectFlags(new AceObjectFlags(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT));
-        ace.setObjectType(UCP_OBJECT_GUID_BYTES);
-        ace.setRights(new AceRights().addOjectRight(AceRights.ObjectRight.CR));
-        final SID sid = SID.newInstance(authority);
-        sid.addSubAuthority(subAuthority);
-        ace.setSid(sid);
+        ace.setObjectType(AdExtendedRight.USER_CHANGE_PASSWORD);
+        ace.setRights(new AceRights().addObjectRight(AceRights.ObjectRight.CR));
+        ace.setSid(wellKnownSid.toSid());
         return ace;
     }
 }

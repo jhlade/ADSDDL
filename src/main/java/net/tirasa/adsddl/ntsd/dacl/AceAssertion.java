@@ -21,8 +21,11 @@
  */
 package net.tirasa.adsddl.ntsd.dacl;
 
+import cz.jhlade.adsddl.data.AdExtendedRight;
+import cz.jhlade.adsddl.data.AdSchemaGuid;
 import net.tirasa.adsddl.ntsd.data.AceFlag;
 import net.tirasa.adsddl.ntsd.data.AceObjectFlags;
+import net.tirasa.adsddl.ntsd.data.AceObjectFlags.Flag;
 import net.tirasa.adsddl.ntsd.data.AceRights;
 import net.tirasa.adsddl.ntsd.data.AceRights.ObjectRight;
 
@@ -102,6 +105,68 @@ public class AceAssertion {
         this.inheritedObjectType = inheritedObjectType;
         this.requiredFlag = requiredFlag;
         this.excludedFlag = excludedFlag;
+    }
+
+    /**
+     * AceAssertion constructor using catalog enums {@link AdExtendedRight} / {@link AdSchemaGuid}.
+     *
+     * @param aceRight ACE right.
+     * @param extendedRight extended right for ObjectType (may be null).
+     * @param inheritedObjectType inherited object class schema GUID (may be null).
+     * @param requiredFlag required AceFlag (may be null).
+     * @param excludedFlag excluded AceFlag (may be null).
+     */
+    public AceAssertion(
+            final AceRights aceRight,
+            final AdExtendedRight extendedRight,
+            final AdSchemaGuid inheritedObjectType,
+            final AceFlag requiredFlag,
+            final AceFlag excludedFlag) {
+        this(
+                aceRight,
+                buildObjectFlags(extendedRight != null, inheritedObjectType != null),
+                extendedRight == null ? null : extendedRight.getGuidString(),
+                inheritedObjectType == null ? null : inheritedObjectType.getGuidString(),
+                requiredFlag,
+                excludedFlag);
+    }
+
+    /**
+     * AceAssertion constructor using {@link AdSchemaGuid} for ObjectType and InheritedObjectType.
+     *
+     * @param aceRight ACE right.
+     * @param objectType schema GUID for ObjectType (may be null).
+     * @param inheritedObjectType schema GUID for InheritedObjectType (may be null).
+     * @param requiredFlag required AceFlag (may be null).
+     * @param excludedFlag excluded AceFlag (may be null).
+     */
+    public AceAssertion(
+            final AceRights aceRight,
+            final AdSchemaGuid objectType,
+            final AdSchemaGuid inheritedObjectType,
+            final AceFlag requiredFlag,
+            final AceFlag excludedFlag) {
+        this(
+                aceRight,
+                buildObjectFlags(objectType != null, inheritedObjectType != null),
+                objectType == null ? null : objectType.getGuidString(),
+                inheritedObjectType == null ? null : inheritedObjectType.getGuidString(),
+                requiredFlag,
+                excludedFlag);
+    }
+
+    private static AceObjectFlags buildObjectFlags(final boolean hasObj, final boolean hasInh) {
+        if (!hasObj && !hasInh) {
+            return null;
+        }
+        final AceObjectFlags flags = new AceObjectFlags();
+        if (hasObj) {
+            flags.addFlag(Flag.ACE_OBJECT_TYPE_PRESENT);
+        }
+        if (hasInh) {
+            flags.addFlag(Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT);
+        }
+        return flags;
     }
 
     /**
@@ -256,76 +321,14 @@ public class AceAssertion {
         if (aceRight == null) {
             return "null";
         }
-        String rightsCode = "?";
         for (ObjectRight rightVal : AceRights.ObjectRight.values()) {
             if ((aceRight.asUInt() & rightVal.getValue()) == rightVal.getValue()) {
-                rightsCode = rightVal.name();
-                break;
+                return rightVal.name();
             }
         }
-        if (rightsCode.equals("?")) {
-            switch ((int) aceRight.asUInt()) {
-                case 0x00000001:
-                    rightsCode = "CC";
-                    break;
-                case 0x00000002:
-                    rightsCode = "DC";
-                    break;
-                case 0x00000004:
-                    rightsCode = "LC";
-                    break;
-                case 0x00000008:
-                    rightsCode = "VW";
-                    break;
-                case 0x00000010:
-                    rightsCode = "RP";
-                    break;
-                case 0x00000020:
-                    rightsCode = "WP";
-                    break;
-                case 0x00000040:
-                    rightsCode = "DT";
-                    break;
-                case 0x00000080:
-                    rightsCode = "LO";
-                    break;
-                // The below are 'first class' rights in the AceRights.ObjectRight enum, therefore
-                // they don't need to be decoded here.
-                // case 0x00000100:
-                // return "CR";
-                // break;
-                // case 0x00010000:
-                // return "DE";
-                // break;
-                // case 0x00020000:
-                // return "RC";
-                // break;
-                // case 0x00040000:
-                // return "WD";
-                // break;
-                // case 0x00080000:
-                // return "WO";
-                // break;
-                // case 0x00100000:
-                // return "SY";
-                // break;
-                // case 0x01000000:
-                // return "AS";
-                // break;
-                // case 0x02000000:
-                // return "MA";
-                // break;
-                // case 0x10000000:
-                // return "GA";
-                // break;
-                // case 0x20000000:
-                // return "GX";
-                // break;
-
-                default:
-                    break;
-            }
+        if (aceRight.asUInt() == 0x00000008L) {
+            return "SW";
         }
-        return rightsCode;
+        return "?";
     }
 }

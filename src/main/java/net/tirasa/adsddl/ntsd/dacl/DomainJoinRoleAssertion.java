@@ -21,14 +21,14 @@
  */
 package net.tirasa.adsddl.ntsd.dacl;
 
-import net.tirasa.adsddl.ntsd.SID;
-import net.tirasa.adsddl.ntsd.data.AceFlag;
-import net.tirasa.adsddl.ntsd.data.AceObjectFlags;
-import net.tirasa.adsddl.ntsd.data.AceObjectFlags.Flag;
-import net.tirasa.adsddl.ntsd.data.AceRights;
-
+import cz.jhlade.adsddl.data.AdExtendedRight;
+import cz.jhlade.adsddl.data.AdSchemaGuid;
 import java.util.Arrays;
 import java.util.List;
+import net.tirasa.adsddl.ntsd.SID;
+import net.tirasa.adsddl.ntsd.data.AceFlag;
+import net.tirasa.adsddl.ntsd.data.AceRights;
+import net.tirasa.adsddl.ntsd.data.AceRights.ObjectRight;
 
 /**
  * Represents an {@linkplain AdRoleAssertion} which specifies the criteria required to join or remove computers
@@ -40,21 +40,20 @@ public class DomainJoinRoleAssertion extends AdRoleAssertion {
     /**
      * Schema GUID of "CN=Computer,CN=Schema,CN=Configuration" objects
      */
-    protected static final String COMPUTER_SCHEMA_ID_GUID = "bf967a86-0de6-11d0-a285-00aa003049e2";
+    protected static final String COMPUTER_SCHEMA_ID_GUID = AdSchemaGuid.CLASS_COMPUTER.getGuidString();
 
     /**
      * Schema GUID of "CN=User-Force-Change-Password,CN=Extended-Rights,CN=Configuration" extended right
      * (aka "reset password")
      */
-    protected static final String RESET_PASSWORD_CR_GUID = "00299570-246d-11d0-a768-00aa006e0529";
+    protected static final String RESET_PASSWORD_CR_GUID = AdExtendedRight.USER_FORCE_CHANGE_PASSWORD.getGuidString();
 
     /**
      * Create computer object applied to "This object and all descendant objects"
      */
     protected static final AceAssertion CREATE_COMPUTER = new AceAssertion(
-            AceRights.parseValue(0x00000001),
-            new AceObjectFlags(Flag.ACE_OBJECT_TYPE_PRESENT),
-            COMPUTER_SCHEMA_ID_GUID,
+            AceRights.parseValue(ObjectRight.CC.getValue()),
+            AdSchemaGuid.CLASS_COMPUTER,
             null,
             AceFlag.CONTAINER_INHERIT_ACE,
             AceFlag.INHERIT_ONLY_ACE);
@@ -63,9 +62,8 @@ public class DomainJoinRoleAssertion extends AdRoleAssertion {
      * DELETE_COMPUTER - Delete computer object applied to "This object and all descendant objects"
      */
     protected static final AceAssertion DELETE_COMPUTER = new AceAssertion(
-            AceRights.parseValue(0x00000002),
-            new AceObjectFlags(Flag.ACE_OBJECT_TYPE_PRESENT),
-            COMPUTER_SCHEMA_ID_GUID,
+            AceRights.parseValue(ObjectRight.DC.getValue()),
+            AdSchemaGuid.CLASS_COMPUTER,
             null,
             AceFlag.CONTAINER_INHERIT_ACE,
             AceFlag.INHERIT_ONLY_ACE);
@@ -74,14 +72,11 @@ public class DomainJoinRoleAssertion extends AdRoleAssertion {
      * LIST_CONTENTS - List contents applied to "This object and all descendant objects"
      */
     protected static final AceAssertion LIST_CONTENTS = new AceAssertion(
-            AceRights.parseValue(0x00000004),
-            null,
-            null,
+            AceRights.parseValue(ObjectRight.LC.getValue()),
+            (AdSchemaGuid) null,
             null,
             AceFlag.CONTAINER_INHERIT_ACE,
             AceFlag.INHERIT_ONLY_ACE);
-
-
 
     /**
      * READ_PROPERTIES - Read All Properties applied at any of below scopes on target Organizational Unit
@@ -90,60 +85,55 @@ public class DomainJoinRoleAssertion extends AdRoleAssertion {
      * - All descendant objects
      */
     protected static final AceAssertion READ_PROPERTIES_ANY_SCOPE = new AceAssertion(
-            AceRights.parseValue(0x00000010));
+            AceRights.parseValue(ObjectRight.RP.getValue()));
 
     /**
      * READ_PROPERTIES - Read All Properties applied to "This object and all descendant objects"
      */
     protected static final AceAssertion READ_PROPERTIES = new AceAssertion(
-            AceRights.parseValue(0x00000010),
-            null,
-            null,
+            AceRights.parseValue(ObjectRight.RP.getValue()),
+            (AdSchemaGuid) null,
             null,
             AceFlag.CONTAINER_INHERIT_ACE,
             AceFlag.INHERIT_ONLY_ACE);
 
     /**
-     *  WRITE_PROPERTIES_COMPUTER_OBJECTS - Write all propeties applied to "Descendant Computer Objects"
+     * WRITE_PROPERTIES_COMPUTER_OBJECTS - Write all propeties applied to "Descendant Computer Objects"
      */
     protected static final AceAssertion WRITE_PROPERTIES_COMPUTER_OBJECTS = new AceAssertion(
-            AceRights.parseValue(0x00000020),
-            new AceObjectFlags(Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT),
-            null,
-            COMPUTER_SCHEMA_ID_GUID,
+            AceRights.parseValue(ObjectRight.WP.getValue()),
+            (AdSchemaGuid) null,
+            AdSchemaGuid.CLASS_COMPUTER,
             AceFlag.CONTAINER_INHERIT_ACE,
             null);
 
     /**
-     *  WRITE_PROPERTIES - Write all propeties applied to "This object and all descendant objects"
+     * WRITE_PROPERTIES - Write all propeties applied to "This object and all descendant objects"
      */
     protected static final AceAssertion WRITE_PROPERTIES = new AceAssertion(
-            AceRights.parseValue(0x00000020),
-            null,
-            null,
+            AceRights.parseValue(ObjectRight.WP.getValue()),
+            (AdSchemaGuid) null,
             null,
             AceFlag.CONTAINER_INHERIT_ACE,
             null);
 
     /**
-     * READ_PERMISSIONS -  Read Permissions(a.k.a Read Control) applied to "This object and all descendant objects"
+     * READ_PERMISSIONS - Read Permissions(a.k.a Read Control) applied to "This object and all descendant objects"
      */
     protected static final AceAssertion READ_PERMISSIONS = new AceAssertion(
-            AceRights.parseValue(0x00020000),
-            null,
-            null,
+            AceRights.parseValue(ObjectRight.RC.getValue()),
+            (AdSchemaGuid) null,
             null,
             AceFlag.CONTAINER_INHERIT_ACE,
             AceFlag.INHERIT_ONLY_ACE);
 
     /**
-     * RESET_PASSWORD  - Permission to force reset password applied to  "Descendant Computer Objects"
+     * RESET_PASSWORD - Permission to force reset password applied to "Descendant Computer Objects"
      */
     protected static final AceAssertion RESET_PASSWORD = new AceAssertion(
-            AceRights.parseValue(AceRights.ObjectRight.CR.getValue()),
-            new AceObjectFlags(Flag.ACE_OBJECT_TYPE_PRESENT, Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT),
-            RESET_PASSWORD_CR_GUID,
-            COMPUTER_SCHEMA_ID_GUID,
+            AceRights.parseValue(ObjectRight.CR.getValue()),
+            AdExtendedRight.USER_FORCE_CHANGE_PASSWORD,
+            AdSchemaGuid.CLASS_COMPUTER,
             AceFlag.CONTAINER_INHERIT_ACE,
             null);
 
