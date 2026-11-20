@@ -16,6 +16,7 @@
 package net.tirasa.adsddl.ntsd;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,7 +28,6 @@ import net.tirasa.adsddl.ntsd.data.AceObjectFlags;
 import net.tirasa.adsddl.ntsd.data.AceRights;
 import net.tirasa.adsddl.ntsd.data.AceType;
 import net.tirasa.adsddl.ntsd.utils.GUID;
-import net.tirasa.adsddl.ntsd.utils.Hex;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +51,7 @@ public class ACE {
     /**
      * @see AceFlag
      */
-    private List<AceFlag> flags;
+    private List<AceFlag> flags = new ArrayList<>();
 
     /**
      * @see AceRights
@@ -101,6 +101,78 @@ public class ACE {
         return ace;
     }
 
+    private static boolean isObjectAceType(final AceType type) {
+        return type == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
+                || type == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE
+                || type == AceType.SYSTEM_AUDIT_OBJECT_ACE_TYPE
+                || type == AceType.SYSTEM_ALARM_OBJECT_ACE_TYPE
+                || type == AceType.ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE
+                || type == AceType.ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE
+                || type == AceType.SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE
+                || type == AceType.SYSTEM_ALARM_CALLBACK_OBJECT_ACE_TYPE;
+    }
+
+    /**
+     * Load the ACE from the byte buffer returning the next byte position in the buffer.
+     *
+     * @param buff source byte buffer.
+     * @param start start loading byte position.
+     * @return next byte position after this ACE.
+     */
+    int parse(final ByteBuffer buff, final int start) {
+        int pos = start;
+
+        type = AceType.parseValue(buff.get(pos));
+        flags = AceFlag.parseValue(buff.get(pos + 1));
+        int size = ((buff.get(pos + 3) & 0xFF) << 8) | (buff.get(pos + 2) & 0xFF);
+
+        pos += 4;
+        int rawRights = (buff.get(pos) & 0xFF)
+                | ((buff.get(pos + 1) & 0xFF) << 8)
+                | ((buff.get(pos + 2) & 0xFF) << 16)
+                | ((buff.get(pos + 3) & 0xFF) << 24);
+        rights = AceRights.parseValue(rawRights);
+        pos += 4;
+
+        if (isObjectAceType(type)) {
+            int rawObjFlags = (buff.get(pos) & 0xFF)
+                    | ((buff.get(pos + 1) & 0xFF) << 8)
+                    | ((buff.get(pos + 2) & 0xFF) << 16)
+                    | ((buff.get(pos + 3) & 0xFF) << 24);
+            objectFlags = AceObjectFlags.parseValue(rawObjFlags);
+            pos += 4;
+
+            if (objectFlags.getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)) {
+                objectType = new byte[16];
+                for (int i = 0; i < 16; i++) {
+                    objectType[i] = buff.get(pos++);
+                }
+            }
+
+            if (objectFlags.getFlags().contains(AceObjectFlags.Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT)) {
+                inheritedObjectType = new byte[16];
+                for (int i = 0; i < 16; i++) {
+                    inheritedObjectType[i] = buff.get(pos++);
+                }
+            }
+        }
+
+        sid = new SID();
+        pos = sid.parse(buff, pos);
+
+        int endPos = start + size;
+        if (endPos > pos) {
+            applicationData = new byte[endPos - pos];
+            for (int i = 0; i < applicationData.length; i++) {
+                applicationData[i] = buff.get(pos++);
+            }
+        } else {
+            applicationData = null;
+        }
+
+        return endPos;
+    }
+
     /**
      * Load the ACE from the buffer returning the last ACE segment position into the buffer.
      *
@@ -120,7 +192,7 @@ public class ACE {
         pos++;
         rights = AceRights.parseValue(NumberFacility.getReverseInt(buff.get(pos)));
 
-        if (type == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE || type == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE) {
+        if (isObjectAceType(type)) {
             pos++;
             objectFlags = AceObjectFlags.parseValue(NumberFacility.getReverseInt(buff.get(pos)));
 
@@ -146,13 +218,16 @@ public class ACE {
         pos = sid.parse(buff, pos);
 
         int lastPos = start + (size / 4) - 1;
-        applicationData = new byte[4 * (lastPos - pos)];
-
-        int index = 0;
-        while (pos < lastPos) {
-            pos++;
-            System.arraycopy(NumberFacility.getBytes(buff.get(pos)), 0, applicationData, index, 4);
-            index += 4;
+        if (lastPos > pos) {
+            applicationData = new byte[4 * (lastPos - pos)];
+            int index = 0;
+            while (pos < lastPos) {
+                pos++;
+                System.arraycopy(NumberFacility.getBytes(buff.get(pos)), 0, applicationData, index, 4);
+                index += 4;
+            }
+        } else {
+            applicationData = null;
         }
 
         return pos;
@@ -175,7 +250,10 @@ public class ACE {
      * @return ACE flags; empty list if no flag has been specified.
      */
     public List<AceFlag> getFlags() {
-        return this.flags == null ? new ArrayList<AceFlag>() : this.flags;
+        if (this.flags == null) {
+            this.flags = new ArrayList<>();
+        }
+        return this.flags;
     }
 
     /**
@@ -298,7 +376,12 @@ public class ACE {
      * @see AceFlag
      */
     public void addFlag(final AceFlag flag) {
-        this.flags.add(flag);
+        if (this.flags == null) {
+            this.flags = new ArrayList<>();
+        }
+        if (flag != null && !this.flags.contains(flag)) {
+            this.flags.add(flag);
+        }
     }
 
     /**
@@ -362,10 +445,10 @@ public class ACE {
     public byte[] toByteArray() {
         final int size = getSize();
 
-        final ByteBuffer buff = ByteBuffer.allocate(size);
+        final ByteBuffer buff = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
 
         // Add type byte
-        buff.put(type.getValue());
+        buff.put(type == null ? AceType.UNEXPECTED.getValue() : type.getValue());
 
         // add flags byte
         byte flagSRC = 0x00;
@@ -374,17 +457,15 @@ public class ACE {
         }
         buff.put(flagSRC);
 
-        // add size bytes (2 reversed)
-        byte[] sizeSRC = NumberFacility.getBytes(size);
-        buff.put(sizeSRC[3]);
-        buff.put(sizeSRC[2]);
+        // add size bytes (2 bytes little-endian)
+        buff.putShort((short) size);
 
-        // add right mask
-        buff.put(Hex.reverse(NumberFacility.getUIntBytes(rights.asUInt())));
+        // add right mask (4 bytes little-endian)
+        buff.putInt(rights == null ? 0 : (int) rights.asUInt());
 
-        // add object flags (from int to byte[] + reversed)
+        // add object flags (4 bytes little-endian)
         if (objectFlags != null) {
-            buff.put(Hex.reverse(NumberFacility.getUIntBytes(objectFlags.asUInt())));
+            buff.putInt((int) objectFlags.asUInt());
         }
 
         // add object type
@@ -398,7 +479,9 @@ public class ACE {
         }
 
         // add sid
-        buff.put(sid.toByteArray());
+        if (sid != null) {
+            buff.put(sid.toByteArray());
+        }
 
         // add application data
         if (applicationData != null) {
@@ -416,11 +499,14 @@ public class ACE {
      */
     @Override
     public boolean equals(final Object ace) {
+        if (this == ace) {
+            return true;
+        }
         if (!(ace instanceof ACE)) {
             return false;
         }
 
-        final ACE ext = ACE.class.cast(ace);
+        final ACE ext = (ACE) ace;
 
         if (getSize() != ext.getSize()) {
             LOG.debug("Different size");
@@ -432,12 +518,12 @@ public class ACE {
             return false;
         }
 
-        if (!Arrays.equals(getApplicationData(), ext.getApplicationData())) {
+        if (!Arrays.equals(this.applicationData, ext.applicationData)) {
             LOG.debug("Different application data");
             return false;
         }
 
-        if (!getSid().equals(ext.getSid())) {
+        if (!Objects.equals(getSid(), ext.getSid())) {
             LOG.debug("Different SID");
             return false;
         }
@@ -450,23 +536,19 @@ public class ACE {
             return false;
         }
 
-        if ((getObjectType() != null && ext.getObjectType() == null)
-                || (getObjectType() == null && ext.getObjectType() != null)
-                || (getObjectType() != null && ext.getObjectType() != null
-                && !Arrays.equals(getObjectType(), ext.getObjectType()))) {
+        if (!Arrays.equals(this.objectType, ext.objectType)) {
             LOG.debug("Different object type");
             return false;
         }
 
-        if ((getInheritedObjectType() != null && ext.getInheritedObjectType() == null)
-                || (getInheritedObjectType() == null && ext.getInheritedObjectType() != null)
-                || (getInheritedObjectType() != null && ext.getInheritedObjectType() != null
-                && !Arrays.equals(getInheritedObjectType(), ext.getInheritedObjectType()))) {
+        if (!Arrays.equals(this.inheritedObjectType, ext.inheritedObjectType)) {
             LOG.debug("Different inherited object type");
             return false;
         }
 
-        if (getRights().asUInt() != ext.getRights().asUInt()) {
+        final long thisRights = getRights() == null ? 0 : getRights().asUInt();
+        final long extRights = ext.getRights() == null ? 0 : ext.getRights().asUInt();
+        if (thisRights != extRights) {
             LOG.debug("Different rights");
             return false;
         }
@@ -483,23 +565,25 @@ public class ACE {
     public String toString() {
         final StringBuilder bld = new StringBuilder();
         bld.append('(');
-        bld.append(type.toString());
+        bld.append(type == null ? "" : type.toString());
         bld.append(';');
 
-        for (AceFlag flag : flags) {
+        for (AceFlag flag : getFlags()) {
             bld.append(flag);
         }
 
         bld.append(';');
 
-        for (AceRights.ObjectRight right : rights.getObjectRights()) {
-            bld.append(right.name());
-        }
+        if (rights != null) {
+            for (AceRights.ObjectRight right : rights.getObjectRights()) {
+                bld.append(right.name());
+            }
 
-        if (rights.getOthers() != 0) {
-            bld.append('[');
-            bld.append(rights.getOthers());
-            bld.append(']');
+            if (rights.getOthers() != 0) {
+                bld.append('[');
+                bld.append(rights.getOthers());
+                bld.append(']');
+            }
         }
 
         bld.append(';');
@@ -516,7 +600,9 @@ public class ACE {
 
         bld.append(';');
 
-        bld.append(sid.toString());
+        if (sid != null) {
+            bld.append(sid.toString());
+        }
 
         bld.append(')');
 
@@ -532,9 +618,9 @@ public class ACE {
     public int hashCode() {
         int hash = 3;
         hash = 53 * hash + Objects.hashCode(this.type);
-        hash = 53 * hash + Objects.hashCode(this.flags);
-        hash = 53 * hash + Objects.hashCode(this.rights);
-        hash = 53 * hash + Objects.hashCode(this.objectFlags);
+        hash = 53 * hash + new HashSet<>(getFlags()).hashCode();
+        hash = 53 * hash + (this.rights == null ? 0 : Long.hashCode(this.rights.asUInt()));
+        hash = 53 * hash + (this.objectFlags == null ? 0 : Long.hashCode(this.objectFlags.asUInt()));
         hash = 53 * hash + Arrays.hashCode(this.objectType);
         hash = 53 * hash + Arrays.hashCode(this.inheritedObjectType);
         hash = 53 * hash + Arrays.hashCode(this.applicationData);

@@ -16,10 +16,9 @@
 package net.tirasa.adsddl.ntsd;
 
 import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Objects;
-import net.tirasa.adsddl.ntsd.utils.Hex;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -131,46 +130,45 @@ public class SDDL {
      */
     public SDDL(byte[] src) {
         final ByteBuffer sddlBuffer = ByteBuffer.wrap(src);
-        parse(sddlBuffer.asIntBuffer(), 0);
+        parse(sddlBuffer, 0);
     }
 
     /**
-     * Load the SDDL from the buffer returning the last SDDL segment position into the buffer.
+     * Load the SDDL from the byte buffer returning the last SDDL segment position in the buffer.
      *
-     * @param buff source buffer.
-     * @param start start loading position.
+     * @param buff source byte buffer.
+     * @param start start loading byte position.
      * @return last loading position.
      */
-    private int parse(final IntBuffer buff, final int start) {
+    private int parse(final ByteBuffer buff, final int start) {
         int pos = start;
 
         /**
          * Revision (1 byte): An unsigned 8-bit value that specifies the revision of the SECURITY_DESCRIPTOR
          * structure. This field MUST be set to one.
          */
-        final byte[] header = NumberFacility.getBytes(buff.get(pos));
-        revision = header[0];
+        revision = buff.get(pos);
 
         /**
          * Control (2 bytes): An unsigned 16-bit field that specifies control access bit flags. The Self Relative
          * (SR) bit MUST be set when the security descriptor is in self-relative format.
          */
-        controlFlags = new byte[] { header[3], header[2] };
+        controlFlags = new byte[] { buff.get(pos + 3), buff.get(pos + 2) };
         final boolean[] controlFlag = NumberFacility.getBits(controlFlags);
 
-        pos++;
+        pos += 4;
         /**
          * OffsetOwner (4 bytes): An unsigned 32-bit integer that specifies the offset to the SID. This SID
          * specifies the owner of the object to which the security descriptor is associated. This must be a valid
          * offset if the OD flag is not set. If this field is set to zero, the OwnerSid field MUST not be present.
          */
         if (!controlFlag[15]) {
-            offsetOwner = NumberFacility.getReverseUInt(buff.get(pos));
+            offsetOwner = readUInt32LE(buff, pos);
         } else {
             offsetOwner = 0;
         }
 
-        pos++;
+        pos += 4;
 
         /**
          * OffsetGroup (4 bytes): An unsigned 32-bit integer that specifies the offset to the SID. This SID
@@ -178,12 +176,12 @@ public class SDDL {
          * offset if the GD flag is not set. If this field is set to zero, the GroupSid field MUST not be present.
          */
         if (!controlFlag[14]) {
-            offsetGroup = NumberFacility.getReverseUInt(buff.get(pos));
+            offsetGroup = readUInt32LE(buff, pos);
         } else {
             offsetGroup = 0;
         }
 
-        pos++;
+        pos += 4;
 
         /**
          * OffsetSacl (4 bytes): An unsigned 32-bit integer that specifies the offset to the ACL that contains
@@ -193,12 +191,12 @@ public class SDDL {
          * field MUST be set to zero. If this field is set to zero, the Sacl field MUST not be present.
          */
         if (controlFlag[11]) {
-            offsetSACL = NumberFacility.getReverseUInt(buff.get(pos));
+            offsetSACL = readUInt32LE(buff, pos);
         } else {
             offsetSACL = 0;
         }
 
-        pos++;
+        pos += 4;
 
         /**
          * OffsetDacl (4 bytes): An unsigned 32-bit integer that specifies the offset to the ACL that contains ACEs
@@ -207,7 +205,7 @@ public class SDDL {
          * zero. If this field is set to zero, the Dacl field MUST not be present.
          */
         if (controlFlag[13]) {
-            offsetDACL = NumberFacility.getReverseUInt(buff.get(pos));
+            offsetDACL = readUInt32LE(buff, pos);
         } else {
             offsetDACL = 0;
         }
@@ -217,10 +215,8 @@ public class SDDL {
          * This field MUST be present if the OffsetOwner field is not zero.
          */
         if (offsetOwner > 0) {
-            // read for OwnerSid
-            pos = (int) (offsetOwner / 4);
             owner = new SID();
-            pos = owner.parse(buff, pos);
+            pos = owner.parse(buff, (int) offsetOwner);
         }
 
         /**
@@ -228,10 +224,8 @@ public class SDDL {
          * This field MUST be present if the GroupOwner field is not zero.
          */
         if (offsetGroup > 0) {
-            // read for GroupSid
-            pos = (int) (offsetGroup / 4);
             group = new SID();
-            pos = group.parse(buff, pos);
+            pos = group.parse(buff, (int) offsetGroup);
         }
 
         /**
@@ -239,10 +233,8 @@ public class SDDL {
          * be present if the SP flag is set.
          */
         if (offsetSACL > 0) {
-            // read for Sacl
-            pos = (int) (offsetSACL / 4);
             sacl = new ACL();
-            pos = sacl.parse(buff, pos);
+            pos = sacl.parse(buff, (int) offsetSACL);
         }
 
         /**
@@ -250,12 +242,18 @@ public class SDDL {
          * be present if the DP flag is set.
          */
         if (offsetDACL > 0) {
-            pos = (int) (offsetDACL / 4);
             dacl = new ACL();
-            pos = dacl.parse(buff, pos);
+            pos = dacl.parse(buff, (int) offsetDACL);
         }
 
         return pos;
+    }
+
+    private static long readUInt32LE(final ByteBuffer buff, final int pos) {
+        return ((buff.get(pos) & 0xFFL))
+                | ((buff.get(pos + 1) & 0xFFL) << 8)
+                | ((buff.get(pos + 2) & 0xFFL) << 16)
+                | ((buff.get(pos + 3) & 0xFFL) << 24);
     }
 
     /**
@@ -330,7 +328,7 @@ public class SDDL {
      * @return SDL as byte array.
      */
     public byte[] toByteArray() {
-        final ByteBuffer buff = ByteBuffer.allocate(getSize());
+        final ByteBuffer buff = ByteBuffer.allocate(getSize()).order(ByteOrder.LITTLE_ENDIAN);
 
         // add revision
         buff.put(revision);
@@ -338,58 +336,54 @@ public class SDDL {
         // add reserved
         buff.put((byte) 0x00);
 
-        // add contro flags
+        // add control flags
         buff.put(controlFlags[1]);
         buff.put(controlFlags[0]);
 
-        // add offset owner
-        buff.position(4);
-
         int nextAvailablePosition = 20;
+
         // add owner SID
+        buff.position(4);
         if (owner == null) {
             buff.putInt(0);
         } else {
-            buff.put(Hex.reverse(NumberFacility.getBytes(nextAvailablePosition)));
+            buff.putInt(nextAvailablePosition);
             buff.position(nextAvailablePosition);
-            buff.put(owner.toByteArray());
-            nextAvailablePosition += owner.getSize();
+            final byte[] ownerBytes = owner.toByteArray();
+            buff.put(ownerBytes);
+            nextAvailablePosition += ownerBytes.length;
         }
 
-        // add offset group
-        buff.position(8);
-
         // add group SID
+        buff.position(8);
         if (group == null) {
             buff.putInt(0);
         } else {
-            buff.put(Hex.reverse(NumberFacility.getBytes(nextAvailablePosition)));
+            buff.putInt(nextAvailablePosition);
             buff.position(nextAvailablePosition);
-            buff.put(group.toByteArray());
-            nextAvailablePosition += group.getSize();
+            final byte[] groupBytes = group.toByteArray();
+            buff.put(groupBytes);
+            nextAvailablePosition += groupBytes.length;
         }
 
-        // add offset sacl
-        buff.position(12);
-
         // add SACL
+        buff.position(12);
         if (sacl == null) {
             buff.putInt(0);
         } else {
-            buff.put(Hex.reverse(NumberFacility.getBytes(nextAvailablePosition)));
+            buff.putInt(nextAvailablePosition);
             buff.position(nextAvailablePosition);
-            buff.put(sacl.toByteArray());
-            nextAvailablePosition += sacl.getSize();
+            final byte[] saclBytes = sacl.toByteArray();
+            buff.put(saclBytes);
+            nextAvailablePosition += saclBytes.length;
         }
 
-        // add offset dacl
-        buff.position(16);
-
         // add DACL
+        buff.position(16);
         if (dacl == null) {
             buff.putInt(0);
         } else {
-            buff.put(Hex.reverse(NumberFacility.getBytes(nextAvailablePosition)));
+            buff.putInt(nextAvailablePosition);
             buff.position(nextAvailablePosition);
             buff.put(dacl.toByteArray());
         }
@@ -402,11 +396,19 @@ public class SDDL {
      */
     @Override
     public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
         if (!(o instanceof SDDL)) {
             return false;
         }
 
-        final SDDL ext = SDDL.class.cast(o);
+        final SDDL ext = (SDDL) o;
+
+        if (revision != ext.revision) {
+            LOG.debug("Different revision");
+            return false;
+        }
 
         if (getSize() != ext.getSize()) {
             LOG.debug("Different size");
@@ -418,24 +420,24 @@ public class SDDL {
             return false;
         }
 
-        if (!getOwner().equals(ext.getOwner())) {
-            LOG.debug("Different owner ....\nEspected; {}\nActual: {}",
-                    getOwner().toString(), ext.getOwner().toString());
+        if (!Objects.equals(getOwner(), ext.getOwner())) {
+            LOG.debug("Different owner ....\nExpected: {}\nActual: {}",
+                    getOwner(), ext.getOwner());
             return false;
         }
 
-        if (!getGroup().equals(ext.getGroup())) {
-            LOG.debug("Different group ....\nEspected; {}\nActual: {}",
-                    getGroup().toString(), ext.getGroup().toString());
+        if (!Objects.equals(getGroup(), ext.getGroup())) {
+            LOG.debug("Different group ....\nExpected: {}\nActual: {}",
+                    getGroup(), ext.getGroup());
             return false;
         }
 
-        if (!getDacl().equals(ext.getDacl())) {
+        if (!Objects.equals(getDacl(), ext.getDacl())) {
             LOG.debug("Different dacl");
             return false;
         }
 
-        if (!getSacl().equals(ext.getSacl())) {
+        if (!Objects.equals(getSacl(), ext.getSacl())) {
             LOG.debug("Different sacl");
             return false;
         }
@@ -481,6 +483,7 @@ public class SDDL {
     @Override
     public int hashCode() {
         int hash = 5;
+        hash = 71 * hash + this.revision;
         hash = 71 * hash + Arrays.hashCode(this.controlFlags);
         hash = 71 * hash + Objects.hashCode(this.owner);
         hash = 71 * hash + Objects.hashCode(this.group);

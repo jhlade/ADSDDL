@@ -16,6 +16,7 @@
 package net.tirasa.adsddl.ntsd;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +82,31 @@ public class ACL {
     }
 
     /**
+     * Load the ACL from the byte buffer returning the next byte position in the buffer.
+     *
+     * @param buff source byte buffer.
+     * @param start start loading byte position.
+     * @return next byte position after this ACL.
+     */
+    int parse(final ByteBuffer buff, final int start) {
+        int pos = start;
+        revision = AclRevision.parseValue(buff.get(pos));
+        // pos + 1 is Sbz1 (reserved), pos + 2..3 is AclSize
+        final int aceCount = ((buff.get(pos + 5) & 0xFF) << 8) | (buff.get(pos + 4) & 0xFF);
+        // pos + 6..7 is Sbz2 (reserved)
+        pos += 8;
+
+        aces.clear();
+        for (int i = 0; i < aceCount; i++) {
+            final ACE ace = new ACE();
+            aces.add(ace);
+            pos = ace.parse(buff, pos);
+        }
+
+        return pos;
+    }
+
+    /**
      * Load the ACL from the buffer returning the last ACL segment position into the buffer.
      *
      * @param buff source buffer.
@@ -97,6 +123,7 @@ public class ACL {
         bytes = NumberFacility.getBytes(buff.get(pos));
         final int aceCount = NumberFacility.getInt(bytes[1], bytes[0]);
 
+        aces.clear();
         for (int i = 0; i < aceCount; i++) {
             pos++;
 
@@ -172,30 +199,24 @@ public class ACL {
      * @return serialized ACL.
      */
     public byte[] toByteArray() {
+        final int size = getSize();
 
-        int size = getSize();
-
-        final ByteBuffer buff = ByteBuffer.allocate(size);
+        final ByteBuffer buff = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
 
         // add revision
-        buff.put(revision.getValue());
+        buff.put(revision == null ? AclRevision.UNEXPECTED.getValue() : revision.getValue());
 
         // add reserved
         buff.put((byte) 0x00);
 
-        // add size (2 bytes reversed)
-        byte[] sizeSRC = NumberFacility.getBytes(size);
-        buff.put(sizeSRC[3]);
-        buff.put(sizeSRC[2]);
+        // add size (2 bytes little-endian)
+        buff.putShort((short) size);
 
-        // add ace count (2 bytes reversed)
-        byte[] aceCountSRC = NumberFacility.getBytes(getAceCount());
-        buff.put(aceCountSRC[3]);
-        buff.put(aceCountSRC[2]);
+        // add ace count (2 bytes little-endian)
+        buff.putShort((short) getAceCount());
 
         // add reserved (2 bytes)
-        buff.put((byte) 0x00);
-        buff.put((byte) 0x00);
+        buff.putShort((short) 0);
 
         // add aces
         for (ACE ace : aces) {
@@ -213,11 +234,19 @@ public class ACL {
      */
     @Override
     public boolean equals(final Object acl) {
+        if (this == acl) {
+            return true;
+        }
         if (!(acl instanceof ACL)) {
             return false;
         }
 
-        final ACL ext = ACL.class.cast(acl);
+        final ACL ext = (ACL) acl;
+
+        if (revision != ext.revision) {
+            LOG.debug("Different revision");
+            return false;
+        }
 
         if (getSize() != ext.getSize()) {
             LOG.debug("Different size");
@@ -264,6 +293,7 @@ public class ACL {
     @Override
     public int hashCode() {
         int hash = 7;
+        hash = 43 * hash + Objects.hashCode(this.revision);
         hash = 43 * hash + Objects.hashCode(this.aces);
         return hash;
     }
