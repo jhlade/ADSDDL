@@ -201,14 +201,16 @@ public class AceRights {
             return res;
         }
 
-        res.others = value;
+        int rem = value;
 
         for (ObjectRight type : ObjectRight.values()) {
             if ((value & type.getValue()) == type.getValue()) {
                 res.rights.add(type);
-                res.others ^= type.getValue();
+                rem &= ~type.getValue();
             }
         }
+
+        res.others = rem & 0xFFFFFFFFL;
 
         return res;
     }
@@ -219,7 +221,7 @@ public class AceRights {
      * @return custom/other rights.
      */
     public long getOthers() {
-        return others;
+        return others & 0xFFFFFFFFL;
     }
 
     /**
@@ -229,7 +231,7 @@ public class AceRights {
      * @return the current ACE rights.
      */
     public AceRights setOthers(final long others) {
-        this.others = others;
+        this.others = others & 0xFFFFFFFFL;
         return this;
     }
 
@@ -249,8 +251,20 @@ public class AceRights {
      * @return the carrent ACE rights.
      */
     public AceRights addOjectRight(final ObjectRight right) {
-        rights.add(right);
+        if (right != null && !rights.contains(right)) {
+            rights.add(right);
+        }
         return this;
+    }
+
+    /**
+     * Adds standard ACE right.
+     *
+     * @param right Object right.
+     * @return the current ACE rights.
+     */
+    public AceRights addObjectRight(final ObjectRight right) {
+        return addOjectRight(right);
     }
 
     /**
@@ -259,12 +273,29 @@ public class AceRights {
      * @return rights as unsigned int.
      */
     public long asUInt() {
-        long res = others;
+        long res = others & 0xFFFFFFFFL;
 
         for (ObjectRight right : rights) {
-            res += right.getValue();
+            res |= (right.getValue() & 0xFFFFFFFFL);
         }
 
         return res;
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof AceRights)) {
+            return false;
+        }
+        final AceRights other = (AceRights) obj;
+        return this.asUInt() == other.asUInt();
+    }
+
+    @Override
+    public int hashCode() {
+        return Long.hashCode(asUInt());
     }
 }

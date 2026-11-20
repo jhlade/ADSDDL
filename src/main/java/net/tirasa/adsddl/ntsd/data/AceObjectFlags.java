@@ -102,7 +102,7 @@ public class AceObjectFlags {
         for (AceObjectFlags.Flag type : AceObjectFlags.Flag.values()) {
             if ((value & type.getValue()) == type.getValue()) {
                 res.flags.add(type);
-                res.others ^= type.getValue();
+                res.others &= ~type.getValue();
             }
         }
 
@@ -125,7 +125,7 @@ public class AceObjectFlags {
      * @return the current ACE object flags.
      */
     public AceObjectFlags addFlag(final Flag flag) {
-        if (!flags.contains(flag)) {
+        if (flag != null && !flags.contains(flag)) {
             flags.add(flag);
         }
         return this;
@@ -137,7 +137,7 @@ public class AceObjectFlags {
      * @return custom/other ACE object flags as long value.
      */
     public long getOthers() {
-        return others;
+        return others & 0xFFFFFFFFL;
     }
 
     /**
@@ -157,12 +157,29 @@ public class AceObjectFlags {
      * @return custom/other ACE object flags as long value.
      */
     public long asUInt() {
-        long res = others;
+        int mask = others;
 
         for (AceObjectFlags.Flag flag : flags) {
-            res += flag.getValue();
+            mask |= flag.getValue();
         }
 
-        return res;
+        return mask & 0xFFFFFFFFL;
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof AceObjectFlags)) {
+            return false;
+        }
+        final AceObjectFlags other = (AceObjectFlags) obj;
+        return this.asUInt() == other.asUInt();
+    }
+
+    @Override
+    public int hashCode() {
+        return Long.hashCode(asUInt());
     }
 }

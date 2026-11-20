@@ -162,6 +162,6 @@ public enum AceType {
             }
         }
 
-        return null;
+        return UNEXPECTED;
     }
 }
