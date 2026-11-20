@@ -108,7 +108,7 @@ public class DomainJoinRoleAssertion extends AdRoleAssertion {
      */
     protected static final AceAssertion WRITE_PROPERTIES_COMPUTER_OBJECTS = new AceAssertion(
             AceRights.parseValue(0x00000020),
-            null,
+            new AceObjectFlags(Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT),
             null,
             COMPUTER_SCHEMA_ID_GUID,
             AceFlag.CONTAINER_INHERIT_ACE,

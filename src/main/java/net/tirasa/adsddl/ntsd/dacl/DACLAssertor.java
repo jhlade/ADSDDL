@@ -358,6 +358,9 @@ public class DACLAssertor {
         }
 
         for (ACE ace : aces) {
+            if (ace.getType() == null || ace.getRights() == null) {
+                continue;
+            }
             long rightsMask = ace.getRights().asUInt();
             LOG.debug("findUnmatchedAssertions, processing ACE: {}", ace);
 
@@ -420,17 +423,9 @@ public class DACLAssertor {
      * the assertion to add if not present in deniedAssertions
      */
     private void addDeniedAssertion(final List<AceAssertion> deniedAssertions, final AceAssertion assertion) {
-        long deniedRight = assertion.getAceRight().asUInt();
-        boolean found = false;
-        for (AceAssertion a : deniedAssertions) {
-            if ((a.getAceRight().asUInt() & deniedRight) == deniedRight) {
-                found = true;
-                break;
-            }
-       }
-       if (!found) {
-           deniedAssertions.add(assertion);
-       }
+        if (!deniedAssertions.contains(assertion)) {
+            deniedAssertions.add(assertion);
+        }
     }
 
     /**
@@ -442,21 +437,11 @@ public class DACLAssertor {
      * list of denied assertions
      */
     private void mergeDenials(final List<AceAssertion> unsatisfiedAssertions, final List<AceAssertion> deniedAssertions) {
-        List<AceAssertion> toAddList = new ArrayList<>();
         for (AceAssertion denial : deniedAssertions) {
-            boolean found = false;
-            for (AceAssertion unsat : unsatisfiedAssertions) {
-                if (unsat.getAceRight().asUInt() == denial.getAceRight().asUInt()) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                toAddList.add(denial);
+            if (!unsatisfiedAssertions.contains(denial)) {
+                unsatisfiedAssertions.add(denial);
             }
         }
-
-        unsatisfiedAssertions.addAll(toAddList);
         LOG.debug("mergeDenials, finished with {} assertion(s) unsatisfied", unsatisfiedAssertions.size());
     }
 
@@ -519,15 +504,15 @@ public class DACLAssertor {
     private boolean doObjectTypesMatch(byte[] aceObjectType, final String assertionObjectType,
             final AceObjectFlags assertionObjFlags) {
         boolean res = true;
-        if (assertionObjFlags == null) {
-            return res;
-        }
-
-        if ((assertionObjFlags.asUInt()
-                & Flag.ACE_OBJECT_TYPE_PRESENT.getValue()) == Flag.ACE_OBJECT_TYPE_PRESENT.getValue()) {
-            if (aceObjectType != null && !GUID.getGuidAsString(aceObjectType).equals(assertionObjectType)) {
+        if (assertionObjFlags != null
+                && (assertionObjFlags.asUInt()
+                        & Flag.ACE_OBJECT_TYPE_PRESENT.getValue()) == Flag.ACE_OBJECT_TYPE_PRESENT.getValue()) {
+            if (aceObjectType != null && !GUID.getGuidAsString(aceObjectType).equalsIgnoreCase(assertionObjectType)) {
                 res = false;
             }
+        } else if (aceObjectType != null && assertionObjectType == null) {
+            // ACE is restricted to a specific objectType, so it cannot satisfy an all-objects/all-properties assertion
+            res = false;
         }
         LOG.debug("doObjectTypesMatch (or may be ignored), result: {}", res);
         return res;
@@ -549,16 +534,17 @@ public class DACLAssertor {
     private boolean doInheritedObjectTypesMatch(byte[] aceInhObjectType, final String assertionInhObjectType,
             final AceObjectFlags assertionObjFlags) {
         boolean res = true;
-        if (assertionObjFlags == null) {
-            return res;
-        }
-
-        if ((assertionObjFlags.asUInt()
-                & Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT.getValue())
-                == Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT.getValue()) {
-            if (aceInhObjectType != null && !GUID.getGuidAsString(aceInhObjectType).equals(assertionInhObjectType)) {
+        if ((assertionObjFlags != null
+                && (assertionObjFlags.asUInt()
+                        & Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT.getValue())
+                        == Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT.getValue())
+                || assertionInhObjectType != null) {
+            if (aceInhObjectType != null && !GUID.getGuidAsString(aceInhObjectType).equalsIgnoreCase(assertionInhObjectType)) {
                 res = false;
             }
+        } else if (aceInhObjectType != null) {
+            // ACE is restricted to a specific inherited child object class, so it cannot satisfy an all-classes assertion
+            res = false;
         }
         LOG.debug("doInheritedObjectTypesMatch (or may be ignored), result: {}", res);
         return res;

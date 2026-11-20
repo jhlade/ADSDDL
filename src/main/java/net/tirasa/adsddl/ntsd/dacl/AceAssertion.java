@@ -188,21 +188,19 @@ public class AceAssertion {
             }
         } else if (other.aceObjectFlags == null) {
             return false;
-        } else if (aceObjectFlags != null && other.aceObjectFlags != null) {
-            if (!aceObjectFlags.getFlags().containsAll(other.aceObjectFlags.getFlags()) || aceObjectFlags.getOthers() != other.aceObjectFlags.getOthers()) {
-                return false;
-            }
-        } if (aceRight == null) {
+        } else if (aceObjectFlags.asUInt() != other.aceObjectFlags.asUInt()) {
+            return false;
+        }
+        if (aceRight == null) {
             if (other.aceRight != null) {
                 return false;
             }
         } else if (other.aceRight == null) {
             return false;
-        } else if (aceRight != null && other.aceRight != null) { 
-            if (!aceRight.getObjectRights().containsAll(other.aceRight.getObjectRights()) || aceRight.getOthers() != other.aceRight.getOthers()) {
-                return false;
-            }
-        } if (inheritedObjectType == null) {
+        } else if (aceRight.asUInt() != other.aceRight.asUInt()) {
+            return false;
+        }
+        if (inheritedObjectType == null) {
             if (other.inheritedObjectType != null) {
                 return false;
             }
