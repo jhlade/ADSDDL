@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import net.tirasa.adsddl.ntsd.utils.Hex;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 import org.slf4j.Logger;
@@ -102,8 +101,78 @@ public class SID {
     public static SID parse(final byte[] src) {
         final ByteBuffer sddlBuffer = ByteBuffer.wrap(src);
         final SID sid = new SID();
-        sid.parse(sddlBuffer.asIntBuffer(), 0);
+        sid.parse(sddlBuffer, 0);
         return sid;
+    }
+
+    /**
+     * Instances a SID instance from its string representation (e.g. "S-1-5-10" or "S-1-5-21-...").
+     *
+     * @param str SID string representation.
+     * @return SID instance.
+     */
+    public static SID parse(final String str) {
+        if (str == null || !str.startsWith("S-") && !str.startsWith("s-")) {
+            throw new IllegalArgumentException("Invalid SID string: " + str);
+        }
+
+        final String[] parts = str.split("-");
+        if (parts.length < 3) {
+            throw new IllegalArgumentException("Invalid SID string: " + str);
+        }
+
+        final byte rev = (byte) (Integer.parseInt(parts[1]) & 0xFF);
+        final String authStr = parts[2];
+        final byte[] authority;
+        if (authStr.startsWith("0x") || authStr.startsWith("0X")) {
+            authority = NumberFacility.getBytes(Long.parseUnsignedLong(authStr.substring(2), 16), 6);
+        } else if (authStr.length() == 12 && !authStr.chars().allMatch(Character::isDigit)) {
+            authority = NumberFacility.getBytes(Long.parseUnsignedLong(authStr, 16), 6);
+        } else {
+            authority = NumberFacility.getBytes(Long.parseUnsignedLong(authStr), 6);
+        }
+
+        final SID sid = new SID();
+        sid.setRevision(rev);
+        sid.setIdentifierAuthority(authority);
+
+        for (int i = 3; i < parts.length; i++) {
+            long sub = Long.parseUnsignedLong(parts[i]);
+            sid.addSubAuthority(NumberFacility.getUIntBytes(sub));
+        }
+
+        return sid;
+    }
+
+    /**
+     * Load the SID from the byte buffer returning the next byte position in the buffer.
+     *
+     * @param buff source byte buffer.
+     * @param start start loading byte position.
+     * @return next byte position after this SID.
+     */
+    int parse(final ByteBuffer buff, final int start) {
+        int pos = start;
+
+        revision = buff.get(pos++);
+        int subAuthorityCount = buff.get(pos++) & 0xFF;
+
+        identifierAuthority = new byte[6];
+        for (int i = 0; i < 6; i++) {
+            identifierAuthority[i] = buff.get(pos++);
+        }
+
+        subAuthorities.clear();
+        for (int j = 0; j < subAuthorityCount; j++) {
+            // SubAuthority is stored in little-endian on the wire; store as 4-byte big-endian
+            byte b0 = buff.get(pos++);
+            byte b1 = buff.get(pos++);
+            byte b2 = buff.get(pos++);
+            byte b3 = buff.get(pos++);
+            subAuthorities.add(new byte[] { b3, b2, b1, b0 });
+        }
+
+        return pos;
     }
 
     /**
@@ -140,6 +209,7 @@ public class SID {
         // SubAuthority (variable): A variable length array of unsigned 32-bit integers that uniquely 
         // identifies a principal relative to the IdentifierAuthority. Its length is determined by 
         // SubAuthorityCount.
+        subAuthorities.clear();
         for (int j = 0; j < subAuthorityCount; j++) {
             pos++;
             subAuthorities.add(Hex.reverse(NumberFacility.getBytes(buff.get(pos))));
@@ -248,15 +318,21 @@ public class SID {
      * @return serialized SID.
      */
     public byte[] toByteArray() {
-        // variable content size depending on sub authorities number
-        final ByteBuffer buff = ByteBuffer.allocate(getSize());
-        buff.put(revision);
-        buff.put(NumberFacility.getBytes(subAuthorities.size())[3]);
-        buff.put(identifierAuthority);
-        for (byte[] sub : subAuthorities) {
-            buff.put(Hex.reverse(sub));
+        final byte[] res = new byte[getSize()];
+        res[0] = revision;
+        res[1] = (byte) (subAuthorities.size() & 0xFF);
+        if (identifierAuthority != null) {
+            System.arraycopy(identifierAuthority, 0, res, 2, 6);
         }
-        return buff.array();
+        int offset = 8;
+        for (byte[] sub : subAuthorities) {
+            res[offset] = sub[3];
+            res[offset + 1] = sub[2];
+            res[offset + 2] = sub[1];
+            res[offset + 3] = sub[0];
+            offset += 4;
+        }
+        return res;
     }
 
     /**
@@ -267,20 +343,24 @@ public class SID {
     @Override
     public String toString() {
         final StringBuilder bld = new StringBuilder();
-        bld.append("S-1-");
+        bld.append("S-").append(revision & 0xFF).append('-');
 
-        if (identifierAuthority[0] == 0x00 && identifierAuthority[1] == 0x00) {
-            bld.append(NumberFacility.getUInt(
-                    identifierAuthority[2], identifierAuthority[3], identifierAuthority[4], identifierAuthority[5]));
+        if (identifierAuthority != null) {
+            if (identifierAuthority[0] == 0x00 && identifierAuthority[1] == 0x00) {
+                bld.append(NumberFacility.getUInt(
+                        identifierAuthority[2], identifierAuthority[3], identifierAuthority[4], identifierAuthority[5]));
+            } else {
+                bld.append(Hex.get(identifierAuthority));
+            }
         } else {
-            bld.append(Hex.get(identifierAuthority));
+            bld.append('0');
         }
 
         if (subAuthorities.isEmpty()) {
             bld.append("-0");
         } else {
             for (byte[] sub : subAuthorities) {
-                bld.append("-");
+                bld.append('-');
                 bld.append(NumberFacility.getUInt(sub));
             }
         }
@@ -296,32 +376,35 @@ public class SID {
      */
     @Override
     public boolean equals(final Object sid) {
+        if (this == sid) {
+            return true;
+        }
         if (!(sid instanceof SID)) {
             return false;
         }
 
-        final SID ext = SID.class.cast(sid);
+        final SID ext = (SID) sid;
 
-        if (getSize() != ext.getSize()) {
-            LOG.debug("Different size");
+        if (revision != ext.revision) {
+            LOG.debug("Different revision");
             return false;
         }
 
-        if (getSubAuthorityCount() != ext.getSubAuthorityCount()) {
+        if (subAuthorities.size() != ext.subAuthorities.size()) {
             LOG.debug("Different sub authorities");
             return false;
         }
 
-        if (!Arrays.equals(getIdentifierAuthority(), ext.getIdentifierAuthority())) {
+        if (!Arrays.equals(identifierAuthority, ext.identifierAuthority)) {
             LOG.debug("Different identifier authority: {}-{}",
-                    Hex.get(identifierAuthority), Hex.get(ext.getIdentifierAuthority()));
+                    Hex.get(identifierAuthority), Hex.get(ext.identifierAuthority));
             return false;
         }
 
         for (int i = 0; i < subAuthorities.size(); i++) {
-            if (!Arrays.equals(subAuthorities.get(i), ext.getSubAuthorities().get(i))) {
+            if (!Arrays.equals(subAuthorities.get(i), ext.subAuthorities.get(i))) {
                 LOG.debug("Different sub authority: {}-{}",
-                        Hex.get(subAuthorities.get(i)), Hex.get(ext.getSubAuthorities().get(i)));
+                        Hex.get(subAuthorities.get(i)), Hex.get(ext.subAuthorities.get(i)));
                 return false;
             }
         }
@@ -337,8 +420,11 @@ public class SID {
     @Override
     public int hashCode() {
         int hash = 5;
+        hash = 97 * hash + this.revision;
         hash = 97 * hash + Arrays.hashCode(this.identifierAuthority);
-        hash = 97 * hash + Objects.hashCode(this.subAuthorities);
+        for (byte[] sub : this.subAuthorities) {
+            hash = 97 * hash + Arrays.hashCode(sub);
+        }
         return hash;
     }
 
