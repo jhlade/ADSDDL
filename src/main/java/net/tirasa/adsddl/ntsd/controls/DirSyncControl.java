@@ -108,6 +108,87 @@ public class DirSyncControl extends BasicControl {
         return buff.array();
     }
 
+    /**
+     * Parses the DirSync response cookie from the LDAP response controls returned by the server.
+     * Eliminates the need to depend on internal JDK {@code com.sun.jndi.ldap.ctl.DirSyncResponseControl}.
+     *
+     * @param controls response controls from {@code LdapContext.getResponseControls()}.
+     * @return extracted sync cookie, or {@code null} if no DirSync response control was present.
+     */
+    public static byte[] parseResponseCookie(final javax.naming.ldap.Control[] controls) {
+        if (controls == null) {
+            return null;
+        }
+        for (javax.naming.ldap.Control control : controls) {
+            if (control != null && OID.equals(control.getID())) {
+                return extractCookieFromBer(control.getEncodedValue());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extracts the octet string cookie from a BER-encoded DirSync response control value:
+     * {@code SEQUENCE { moreResults INTEGER, unusedAttributeCount INTEGER, cookie OCTET STRING }}.
+     *
+     * @param ber BER-encoded control value.
+     * @return cookie byte array, or empty byte array if absent/malformed.
+     */
+    public static byte[] extractCookieFromBer(final byte[] ber) {
+        if (ber == null || ber.length < 2 || ber[0] != 0x30) {
+            return EMPTY_COOKIE;
+        }
+        int pos = 1;
+        pos += berLengthFieldBytes(ber, pos);
+        // Skip first INTEGER (flag / moreResults)
+        pos = skipBerElement(ber, pos);
+        // Skip second INTEGER (maxReturnLength / unused)
+        pos = skipBerElement(ber, pos);
+        if (pos >= ber.length || ber[pos] != 0x04) {
+            return EMPTY_COOKIE;
+        }
+        pos++;
+        final int cookieLen = readBerLength(ber, pos);
+        pos += berLengthFieldBytes(ber, pos);
+        if (cookieLen <= 0 || pos + cookieLen > ber.length) {
+            return EMPTY_COOKIE;
+        }
+        return Arrays.copyOfRange(ber, pos, pos + cookieLen);
+    }
+
+    private static int berLengthFieldBytes(final byte[] ber, final int pos) {
+        if (pos >= ber.length) {
+            return 0;
+        }
+        final int b = ber[pos] & 0xFF;
+        return (b & 0x80) == 0 ? 1 : 1 + (b & 0x7F);
+    }
+
+    private static int readBerLength(final byte[] ber, final int pos) {
+        if (pos >= ber.length) {
+            return 0;
+        }
+        final int b = ber[pos] & 0xFF;
+        if ((b & 0x80) == 0) {
+            return b;
+        }
+        final int count = b & 0x7F;
+        int len = 0;
+        for (int i = 1; i <= count && pos + i < ber.length; i++) {
+            len = (len << 8) | (ber[pos + i] & 0xFF);
+        }
+        return len;
+    }
+
+    private static int skipBerElement(final byte[] ber, final int pos) {
+        if (pos >= ber.length) {
+            return ber.length;
+        }
+        final int lenPos = pos + 1;
+        final int elemLen = readBerLength(ber, lenPos);
+        return lenPos + berLengthFieldBytes(ber, lenPos) + elemLen;
+    }
+
     public DirSyncControl setFlags(final int flags) {
         this.flags = flags;
         // value encoding must be regenerated to provide new flags ...

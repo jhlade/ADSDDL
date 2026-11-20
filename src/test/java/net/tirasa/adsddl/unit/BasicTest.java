@@ -271,6 +271,7 @@ public class BasicTest {
             assertEquals((byte) 0x82, value[17]); // long form
 
             assertEquals('n', value[expectedValueSize - 1]);
+            assertTrue(Arrays.equals(cookie.getBytes(), DirSyncControl.extractCookieFromBer(value)));
         } catch (Exception ex) {
             Logger.getLogger(BasicTest.class.getName()).log(Level.SEVERE, null, ex);
         }

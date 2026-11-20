@@ -17,7 +17,6 @@ package net.tirasa.adsddl.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.sun.jndi.ldap.ctl.DirSyncResponseControl;
 import java.util.AbstractMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -169,11 +168,9 @@ public class DirSyncTest extends AbstractTest {
                 if (rspCtls != null) {
                     LOG.debug("Response Controls: {}", rspCtls.length);
 
-                    for (Control rspCtl : rspCtls) {
-                        if (rspCtl instanceof DirSyncResponseControl) {
-                            DirSyncResponseControl dirSyncRspCtl = (DirSyncResponseControl) rspCtl;
-                            latestSyncToken = new SyncToken(dirSyncRspCtl.getCookie());
-                        }
+                    final byte[] cookie = DirSyncControl.parseResponseCookie(rspCtls);
+                    if (cookie != null) {
+                        latestSyncToken = new SyncToken(cookie);
                     }
 
                     LOG.debug("Latest sync token set to {}", latestSyncToken);
