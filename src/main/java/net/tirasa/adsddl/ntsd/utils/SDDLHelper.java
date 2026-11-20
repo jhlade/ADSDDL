@@ -20,7 +20,6 @@ import java.util.List;
 import net.tirasa.adsddl.ntsd.ACE;
 import net.tirasa.adsddl.ntsd.SDDL;
 import net.tirasa.adsddl.ntsd.SID;
-import net.tirasa.adsddl.ntsd.data.AceFlag;
 import net.tirasa.adsddl.ntsd.data.AceObjectFlags;
 import net.tirasa.adsddl.ntsd.data.AceRights;
 import net.tirasa.adsddl.ntsd.data.AceType;
@@ -35,6 +34,26 @@ public class SDDLHelper {
      * User cannot change password GUID.
      */
     public static final String UCP_OBJECT_GUID = "ab721a53-1e2f-11d0-9819-00aa0040529b";
+
+    /**
+     * Well-known SID string for Everyone (World).
+     */
+    public static final String EVERYONE_SID_STRING = "S-1-1-0";
+
+    /**
+     * Well-known SID string for Principal Self.
+     */
+    public static final String SELF_SID_STRING = "S-1-5-10";
+
+    /**
+     * Well-known SID string for Authenticated Users.
+     */
+    public static final String AUTHENTICATED_USERS_SID_STRING = "S-1-5-11";
+
+    /**
+     * Well-known SID string for Local System.
+     */
+    public static final String SYSTEM_SID_STRING = "S-1-5-18";
 
     private static final byte[] UCP_OBJECT_GUID_BYTES = GUID.getGuidAsByteArray(UCP_OBJECT_GUID);
 
@@ -57,10 +76,8 @@ public class SDDLHelper {
             return false;
         }
 
-        boolean res = false;
-
         final List<ACE> aces = sddl.getDacl().getAces();
-        for (int i = 0; !res && i < aces.size(); i++) {
+        for (int i = 0, n = aces.size(); i < n; i++) {
             final ACE ace = aces.get(i);
 
             if (ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE
@@ -70,12 +87,12 @@ public class SDDLHelper {
 
                 final SID sid = ace.getSid();
                 if (isEveryoneSid(sid) || isSelfSid(sid)) {
-                    res = true;
+                    return true;
                 }
             }
         }
 
-        return res;
+        return false;
     }
 
     /**
@@ -97,7 +114,7 @@ public class SDDLHelper {
         ACE self = null;
 
         final List<ACE> aces = sddl.getDacl().getAces();
-        for (int i = 0; (everyone == null || self == null) && i < aces.size(); i++) {
+        for (int i = 0, n = aces.size(); (everyone == null || self == null) && i < n; i++) {
             final ACE ace = aces.get(i);
 
             if ((ace.getType() == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
@@ -129,24 +146,30 @@ public class SDDLHelper {
             self = createUcpAce(type, SELF_AUTHORITY, SELF_SUB_AUTHORITY);
         }
 
-        insertCanonical(aces, everyone);
-        insertCanonical(aces, self);
+        sddl.getDacl().addAceCanonical(everyone);
+        sddl.getDacl().addAceCanonical(self);
 
         return sddl;
     }
 
-    private static boolean isEveryoneSid(final SID sid) {
-        return sid != null
-                && sid.getSubAuthorityCount() == 1
-                && Arrays.equals(sid.getIdentifierAuthority(), EVERYONE_AUTHORITY)
-                && Arrays.equals(sid.getSubAuthorities().get(0), EVERYONE_SUB_AUTHORITY);
+    /**
+     * Checks whether the given SID is Everyone (S-1-1-0) without allocating copies of byte arrays.
+     *
+     * @param sid SID to check.
+     * @return true if S-1-1-0.
+     */
+    public static boolean isEveryoneSid(final SID sid) {
+        return sid != null && sid.matchesSingleSubAuthority(0, 1, 0);
     }
 
-    private static boolean isSelfSid(final SID sid) {
-        return sid != null
-                && sid.getSubAuthorityCount() == 1
-                && Arrays.equals(sid.getIdentifierAuthority(), SELF_AUTHORITY)
-                && Arrays.equals(sid.getSubAuthorities().get(0), SELF_SUB_AUTHORITY);
+    /**
+     * Checks whether the given SID is Principal Self (S-1-5-10) without allocating copies of byte arrays.
+     *
+     * @param sid SID to check.
+     * @return true if S-1-5-10.
+     */
+    public static boolean isSelfSid(final SID sid) {
+        return sid != null && sid.matchesSingleSubAuthority(0, 5, 10);
     }
 
     private static ACE createUcpAce(final AceType type, final byte[] authority, final byte[] subAuthority) {
@@ -158,29 +181,5 @@ public class SDDLHelper {
         sid.addSubAuthority(subAuthority);
         ace.setSid(sid);
         return ace;
-    }
-
-    private static void insertCanonical(final List<ACE> aces, final ACE aceToInsert) {
-        final boolean isDeny = aceToInsert.getType() == AceType.ACCESS_DENIED_ACE_TYPE
-                || aceToInsert.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE;
-
-        int insertIndex = aces.size();
-        for (int i = 0; i < aces.size(); i++) {
-            final ACE current = aces.get(i);
-            final boolean isInherited = current.getFlags().contains(AceFlag.INHERITED_ACE);
-            if (isInherited) {
-                insertIndex = i;
-                break;
-            }
-            if (isDeny) {
-                final boolean currentIsAllow = current.getType() == AceType.ACCESS_ALLOWED_ACE_TYPE
-                        || current.getType() == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE;
-                if (currentIsAllow) {
-                    insertIndex = i;
-                    break;
-                }
-            }
-        }
-        aces.add(insertIndex, aceToInsert);
     }
 }

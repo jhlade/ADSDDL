@@ -75,7 +75,7 @@ public class DACLAssertor {
     /**
      * SID of the 'Everyone' AD group.
      */
-    private static final String EVERYONE_SID = "S-1-1-0";
+    private static final SID EVERYONE_SID = SID.parse("S-1-1-0");
 
     /**
      * LDAP search filter for the object whose DACL will be evaluated.
@@ -250,17 +250,14 @@ public class DACLAssertor {
      * @return List of unsatisfied AceAssertions (if any). Empty if none.
      */
     private List<AceAssertion> findUnsatisfiedAssertions(final AdRoleAssertion roleAssertion) {
-        HashMap<String, List<ACE>> acesBySIDMap = new HashMap<String, List<ACE>>();
+        HashMap<SID, List<ACE>> acesBySIDMap = new HashMap<>();
 
         for (int i = 0; i < dacl.getAceCount(); i++) {
             final ACE ace = dacl.getAce(i);
             LOG.trace("ACE {}: {}", i, ace);
-            if (ace.getSid() != null) {
-                if (!acesBySIDMap.containsKey(ace.getSid().toString())) {
-                    acesBySIDMap.put(ace.getSid().toString(), new ArrayList<ACE>());
-                }
-                List<ACE> aces = acesBySIDMap.get(ace.getSid().toString());
-                aces.add(ace);
+            final SID sid = ace.getSid();
+            if (sid != null) {
+                acesBySIDMap.computeIfAbsent(sid, k -> new ArrayList<>()).add(ace);
             }
         }
 
@@ -270,7 +267,7 @@ public class DACLAssertor {
         List<AceAssertion> unsatisfiedAssertions = new ArrayList<>(roleAssertion.getAssertions());
         List<AceAssertion> deniedAssertions = new ArrayList<>();
         SID principal = roleAssertion.getPrincipal();
-        List<ACE> principalAces = acesBySIDMap.get(principal.toString());
+        List<ACE> principalAces = acesBySIDMap.get(principal);
 
         if (principalAces == null) {
             LOG.debug("findUnsatisfiedAssertions, no ACEs matching principal {} in DACL, will attempt to search member "
@@ -306,7 +303,7 @@ public class DACLAssertor {
 
             int groupCount = 1;
             for (SID grpSID : tokenGroupSIDs) {
-                principalAces = acesBySIDMap.get(grpSID.toString());
+                principalAces = acesBySIDMap.get(grpSID);
                 if (principalAces == null) {
                     continue;
                 }
@@ -329,7 +326,7 @@ public class DACLAssertor {
         return unsatisfiedAssertions;
     }
 
-    private void doEveryoneGroupScan(final HashMap<String, List<ACE>> acesBySIDMap, final List<AceAssertion> unsatisfiedAssertions,
+    private void doEveryoneGroupScan(final HashMap<SID, List<ACE>> acesBySIDMap, final List<AceAssertion> unsatisfiedAssertions,
             final List<AceAssertion> deniedAssertions, final List<AceAssertion> roleAssertions) {
         LOG.debug("doEveryoneGroupScan, starting");
         List<ACE> everyoneACEs = acesBySIDMap.get(EVERYONE_SID);
@@ -507,7 +504,7 @@ public class DACLAssertor {
         if (assertionObjFlags != null
                 && (assertionObjFlags.asUInt()
                         & Flag.ACE_OBJECT_TYPE_PRESENT.getValue()) == Flag.ACE_OBJECT_TYPE_PRESENT.getValue()) {
-            if (aceObjectType != null && !GUID.getGuidAsString(aceObjectType).equalsIgnoreCase(assertionObjectType)) {
+            if (aceObjectType != null && !GUID.equals(aceObjectType, assertionObjectType)) {
                 res = false;
             }
         } else if (aceObjectType != null && assertionObjectType == null) {
@@ -539,7 +536,7 @@ public class DACLAssertor {
                         & Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT.getValue())
                         == Flag.ACE_INHERITED_OBJECT_TYPE_PRESENT.getValue())
                 || assertionInhObjectType != null) {
-            if (aceInhObjectType != null && !GUID.getGuidAsString(aceInhObjectType).equalsIgnoreCase(assertionInhObjectType)) {
+            if (aceInhObjectType != null && !GUID.equals(aceInhObjectType, assertionInhObjectType)) {
                 res = false;
             }
         } else if (aceInhObjectType != null) {
