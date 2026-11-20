@@ -94,7 +94,6 @@
 
   <properties>    
     <slf4j.version>1.7.36</slf4j.version>
-    <jaxb.version>2.3.1</jaxb.version>
 
     <targetJdk>11</targetJdk>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -108,18 +107,6 @@
       <optional>true</optional>
     </dependency>
 
-    <dependency>
-      <groupId>org.glassfish.main.external</groupId>
-      <artifactId>ldapbp-repackaged</artifactId>
-      <version>5.0</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>javax.xml.bind</groupId>
-      <artifactId>jaxb-api</artifactId>
-      <version>${jaxb.version}</version>
-      <scope>test</scope>
-    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -210,45 +197,49 @@
         <artifactId>license-maven-plugin</artifactId>
         <version>5.1.2</version>
         <configuration>
-          <header>${basedir}/src/main/resources/license-header.txt</header>
           <strictCheck>true</strictCheck>
           <failIfMissing>true</failIfMissing>
           <aggregate>true</aggregate>
           <useDefaultExcludes>true</useDefaultExcludes>
           <useDefaultMapping>true</useDefaultMapping>
-          <headerSections>
-            <headerSection>
-              <key>COPYRIGHT_SECTION</key>
-              <defaultValue>Copyright (C) 2015 Tirasa (info@tirasa.net)</defaultValue>
-              <ensureMatch>Copyright .*</ensureMatch>
-            </headerSection>
-          </headerSections>
+          <licenseSets>
+            <licenseSet>
+              <header>${basedir}/src/main/resources/license-header.txt</header>
+              <headerSections>
+                <headerSection>
+                  <key>COPYRIGHT_SECTION</key>
+                  <defaultValue>Copyright (C) 2015 Tirasa (info@tirasa.net)</defaultValue>
+                  <ensureMatch>Copyright .*</ensureMatch>
+                </headerSection>
+              </headerSections>
+              <excludes>
+                <exclude>**/LICENSE*</exclude>
+                <exclude>**/NOTICE*</exclude>
+                <exclude>**/*.pfx</exclude>
+                <exclude>**/*.dll</exclude>
+                <exclude>**/*.so</exclude>
+                <exclude>**/*.jnilib</exclude>
+                <exclude>nbactions.xml</exclude>
+                <exclude>nb-configuration.xml</exclude>
+                <exclude>**/META-INF/services/**</exclude>
+                <exclude>**/*.css</exclude>
+                <exclude>**/*.js</exclude>
+                <exclude>**/*.csv</exclude>
+                <exclude>**/maven-eclipse.xml</exclude>
+                <exclude>**/*.iml</exclude>
+                <exclude>**/*.log</exclude>
+                <exclude>.externalToolBuilders/**</exclude>
+                <exclude>.git/**</exclude>
+                <exclude>.idea/**</exclude>
+                <exclude>**/*.bin</exclude>
+                <exclude>**/.*</exclude>
+              </excludes>
+            </licenseSet>
+          </licenseSets>
           <mapping>
             <md>XML_STYLE</md>
             <java>SLASHSTAR_STYLE</java>
           </mapping>
-          <excludes>
-            <exclude>**/LICENSE*</exclude>
-            <exclude>**/NOTICE*</exclude>
-            <exclude>**/*.pfx</exclude>
-            <exclude>**/*.dll</exclude>
-            <exclude>**/*.so</exclude>
-            <exclude>**/*.jnilib</exclude>
-            <exclude>nbactions.xml</exclude>
-            <exclude>nb-configuration.xml</exclude>
-            <exclude>**/META-INF/services/**</exclude>
-            <exclude>**/*.css</exclude>
-            <exclude>**/*.js</exclude>
-            <exclude>**/*.csv</exclude>
-            <exclude>**/maven-eclipse.xml</exclude>
-            <exclude>**/*.iml</exclude>
-            <exclude>**/*.log</exclude>
-            <exclude>.externalToolBuilders/**</exclude>
-            <exclude>.git/**</exclude>
-            <exclude>.idea/**</exclude>
-            <exclude>**/*.bin</exclude>
-            <exclude>**/.*</exclude>
-          </excludes>
         </configuration>
         <executions>
           <execution>
@@ -260,22 +251,18 @@
           </execution>
         </executions>
       </plugin>
-      
+
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>ianal-maven-plugin</artifactId>
-        <version>1.0-alpha-1</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>verify-legal-files</goal>
-            </goals>
-            <configuration>
-              <!-- Fail the build if any artifacts are missing legal files -->
-              <strict>true</strict>
-            </configuration>
-          </execution>
-        </executions>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.5.0</version>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Automatic-Module-Name>net.tirasa.adsddl</Automatic-Module-Name>
+            </manifestEntries>
+          </archive>
+        </configuration>
       </plugin>
       
       <plugin>
@@ -297,16 +284,11 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.16.0</version>
         <configuration>
-          <source>${targetJdk}</source>
-          <target>${targetJdk}</target>
+          <release>${targetJdk}</release>
           <useIncrementalCompilation>false</useIncrementalCompilation>
           <showWarnings>true</showWarnings>
           <showDeprecation>true</showDeprecation>
           <compilerArgument>-Xlint:unchecked</compilerArgument>
-          <compilerArgs>
-            <arg>--add-exports</arg>
-            <arg>java.naming/com.sun.jndi.ldap=ALL-UNNAMED</arg>
-          </compilerArgs>
         </configuration>
       </plugin>
     </plugins>
@@ -335,7 +317,6 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <configuration>
-              <argLine>--add-opens java.naming/com.sun.jndi.ldap=ALL-UNNAMED</argLine>
               <includes>
                 <include>**/it/*Test.java</include>
               </includes>

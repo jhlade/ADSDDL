@@ -35,13 +35,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import javax.naming.NamingException;
-import javax.xml.bind.DatatypeConverter;
 import net.tirasa.adsddl.ntsd.ACL;
 import net.tirasa.adsddl.ntsd.SDDL;
 import net.tirasa.adsddl.ntsd.SID;
 import net.tirasa.adsddl.ntsd.dacl.AceAssertion;
 import net.tirasa.adsddl.ntsd.dacl.DACLAssertor;
 import net.tirasa.adsddl.ntsd.dacl.DomainJoinRoleAssertion;
+import net.tirasa.adsddl.ntsd.utils.Hex;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -68,7 +68,7 @@ public class DACLAssertorTest {
     public void setUp() throws IOException, URISyntaxException {
         byte[] src = Files.readAllBytes(
                 Path.of(this.getClass().getResource("/sddlSampleForAssertor.bin").toURI()));
-        String hexString = DatatypeConverter.printHexBinary(src);
+        String hexString = Hex.get(src);
         LOG.debug("SDDL hexDump: {}", hexString);
 
         this.sddl = new SDDL(src);
@@ -76,7 +76,7 @@ public class DACLAssertorTest {
 
         src = Files.readAllBytes(
                 Path.of(this.getClass().getResource("/sddlSampleForAssertor2.bin").toURI()));
-        hexString = javax.xml.bind.DatatypeConverter.printHexBinary(src);
+        hexString = Hex.get(src);
         LOG.debug("SDDL 2 hexDump: {}", hexString);
 
         this.sddl_denials = new SDDL(src);
