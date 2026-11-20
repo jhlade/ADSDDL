@@ -20,15 +20,7 @@ import javax.naming.ldap.BasicControl;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 
 /**
- * Active Directory directory synchronization (DirSync) control is an LDAP server extension that enables an application
- * to search an directory partition for objects that have changed since a previous state.
- * When you perform a DirSync search, you pass in a provider-specific data element (cookie) that identifies the
- * directory state at the time of the previous DirSync search. For the first search, you pass in a null cookie, and the
- * search returns all objects that match the filter. The search also returns a valid cookie. Store the cookie in the
- * same storage that you are synchronizing with the Active Directory server. On subsequent searches, get the cookie from
- * storage and pass it with the search request. The search results now include only the objects and attributes that have
- * changed since the previous state identified by the cookie. The search also returns a new cookie to store for the next
- * search.
+ * The LDAP_SERVER_SEARCH_OPTIONS_OID control is used to pass flags to the server to control various search behaviors.
  */
 public class SearchOptionsControl extends BasicControl {
 
@@ -36,18 +28,14 @@ public class SearchOptionsControl extends BasicControl {
 
     /**
      * LDAP_SERVER_SEARCH_OPTIONS_OID.
-     * Directory synchronization control.
      */
     public static final String OID = "1.2.840.113556.1.4.1340";
 
     /**
-     * LDAP_DIRSYNC_INCREMENTAL_VALUES | LDAP_DIRSYNC_ANCESTORS_FIRST_ORDER | LDAP_DIRSYNC_OBJECT_SECURITY
-     * LDAP_DIRSYNC_OBJECT_SECURITY: 1
-     * LDAP_DIRSYNC_ANCESTORS_FIRST_ORDER: 0x00000800
-     * LDAP_DIRSYNC_PUBLIC_DATA_ONLY: 0x00002000
-     * LDAP_DIRSYNC_INCREMENTAL_VALUES: 0x80000000
+     * SERVER_SEARCH_FLAG_DOMAIN_SCOPE: 0x00000001
+     * SERVER_SEARCH_FLAG_PHANTOM_ROOT: 0x00000002
      */
-    private final int flags = 0x80000801;
+    private int flags = 0x00000001;
 
     /**
      * Constructor.
@@ -58,17 +46,41 @@ public class SearchOptionsControl extends BasicControl {
     }
 
     /**
+     * Constructor.
+     *
+     * @param flags search option flags.
+     */
+    public SearchOptionsControl(final int flags) {
+        super(OID, true, null);
+        this.flags = flags;
+        this.value = berEncodedValue();
+    }
+
+    /**
+     * Sets search option flags.
+     *
+     * @param flags search option flags.
+     * @return the current SearchOptionsControl instance.
+     */
+    public SearchOptionsControl setFlags(final int flags) {
+        this.flags = flags;
+        this.value = berEncodedValue();
+        return this;
+    }
+
+    /**
      * BER encode the flags.
      *
      * @return flags BER encoded.
      */
     private byte[] berEncodedValue() {
-        final ByteBuffer buff = ByteBuffer.allocate(8);
+        final byte[] trimmed = NumberFacility.leftTrim(NumberFacility.getBytes(flags));
+        final ByteBuffer buff = ByteBuffer.allocate(4 + trimmed.length);
         buff.put((byte) 0x30); // (Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
-        buff.put((byte) 0x06); // size
-        buff.put((byte) 0x02); // 4bytes int tag
-        buff.put((byte) 0x04); // int size
-        buff.put(NumberFacility.leftTrim(NumberFacility.getBytes(flags))); // value
+        buff.put((byte) (2 + trimmed.length)); // size
+        buff.put((byte) 0x02); // int tag
+        buff.put((byte) trimmed.length); // int size
+        buff.put(trimmed); // value
         return buff.array();
     }
 }

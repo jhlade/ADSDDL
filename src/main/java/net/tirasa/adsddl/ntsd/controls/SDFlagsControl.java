@@ -118,12 +118,13 @@ public class SDFlagsControl extends BasicControl {
      * @return flags BER encoded.
      */
     private byte[] berEncodedValue() {
-        final ByteBuffer buff = ByteBuffer.allocate(5);
+        final byte[] trimmed = NumberFacility.leftTrim(NumberFacility.getBytes(flags));
+        final ByteBuffer buff = ByteBuffer.allocate(4 + trimmed.length);
         buff.put((byte) 0x30); // (Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
-        buff.put((byte) 0x03); // size
-        buff.put((byte) 0x02); // 4bytes int tag
-        buff.put((byte) 0x01); // int size
-        buff.put(NumberFacility.leftTrim(NumberFacility.getBytes(flags))); // value
+        buff.put((byte) (2 + trimmed.length)); // size
+        buff.put((byte) 0x02); // int tag
+        buff.put((byte) trimmed.length); // int size
+        buff.put(trimmed); // value
         return buff.array();
     }
 }

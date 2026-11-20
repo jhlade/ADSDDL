@@ -16,6 +16,7 @@
 package net.tirasa.adsddl.ntsd.controls;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import javax.naming.ldap.BasicControl;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
 
@@ -73,7 +74,7 @@ public class DirSyncControl extends BasicControl {
      */
     public DirSyncControl(byte[] cookie) {
         super(OID, true, cookie);
-        this.cookie = cookie;
+        this.cookie = cookie == null ? EMPTY_COOKIE : Arrays.copyOf(cookie, cookie.length);
         super.value = berEncodedValue();
     }
 
