@@ -275,4 +275,42 @@ public class BasicTest {
             Logger.getLogger(BasicTest.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+
+    @Test
+    public void loggerAbstraction() {
+        final java.util.List<String> captured = new java.util.ArrayList<>();
+        try {
+            // 1. Custom logger backend
+            net.tirasa.adsddl.ntsd.utils.AdsddlLogger.setFactory(name -> new net.tirasa.adsddl.ntsd.utils.AdsddlLogger() {
+                @Override
+                public boolean isDebugEnabled() {
+                    return true;
+                }
+
+                @Override
+                public void debug(final String format, final Object... args) {
+                    captured.add(name + ":" + net.tirasa.adsddl.ntsd.utils.AdsddlLogger.format(format, args));
+                }
+            });
+
+            // Trigger debug log in SID.equals
+            final SID s1 = SID.parse("S-1-1-0");
+            final SID s2 = SID.parse("S-1-5-10");
+            assertTrue(!s1.equals(s2));
+            assertTrue(!captured.isEmpty());
+            assertTrue(captured.get(0).contains(SID.class.getName()));
+
+            // 2. Null / disabled backend (no-op)
+            captured.clear();
+            net.tirasa.adsddl.ntsd.utils.AdsddlLogger.setFactory(null);
+            assertTrue(!s1.equals(s2));
+            assertTrue(captured.isEmpty());
+
+            // 3. JUL backend
+            net.tirasa.adsddl.ntsd.utils.AdsddlLogger.useJul();
+            assertTrue(!s1.equals(s2));
+        } finally {
+            net.tirasa.adsddl.ntsd.utils.AdsddlLogger.resetDefault();
+        }
+    }
 }

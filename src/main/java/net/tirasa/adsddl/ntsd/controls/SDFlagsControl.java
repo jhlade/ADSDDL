@@ -17,9 +17,8 @@ package net.tirasa.adsddl.ntsd.controls;
 
 import java.nio.ByteBuffer;
 import javax.naming.ldap.BasicControl;
+import net.tirasa.adsddl.ntsd.utils.AdsddlLogger;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * When performing an LDAP operation (modify or search), the client may supply an SD Flags Control
@@ -51,7 +50,7 @@ public class SDFlagsControl extends BasicControl {
     /**
      * Logger.
      */
-    private static final Logger LOG = LoggerFactory.getLogger(SDFlagsControl.class);
+    private static final AdsddlLogger LOG = AdsddlLogger.getLogger(SDFlagsControl.class);
 
     /**
      * LDAP_SERVER_SD_FLAGS_OID.

@@ -35,9 +35,6 @@ import javax.naming.directory.SearchResult;
 import javax.naming.ldap.Control;
 import javax.naming.ldap.LdapContext;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import net.tirasa.adsddl.ntsd.ACE;
 import net.tirasa.adsddl.ntsd.ACL;
 import net.tirasa.adsddl.ntsd.SDDL;
@@ -47,6 +44,7 @@ import net.tirasa.adsddl.ntsd.data.AceFlag;
 import net.tirasa.adsddl.ntsd.data.AceObjectFlags;
 import net.tirasa.adsddl.ntsd.data.AceObjectFlags.Flag;
 import net.tirasa.adsddl.ntsd.data.AceType;
+import net.tirasa.adsddl.ntsd.utils.AdsddlLogger;
 import net.tirasa.adsddl.ntsd.utils.GUID;
 
 /**
@@ -70,7 +68,7 @@ import net.tirasa.adsddl.ntsd.utils.GUID;
  */
 public class DACLAssertor {
 
-    private static final Logger LOG = LoggerFactory.getLogger(DACLAssertor.class);
+    private static final AdsddlLogger LOG = AdsddlLogger.getLogger(DACLAssertor.class);
 
     /**
      * SID of the 'Everyone' AD group.

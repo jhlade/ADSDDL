@@ -21,9 +21,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import net.tirasa.adsddl.ntsd.data.SddlControlFlag;
+import net.tirasa.adsddl.ntsd.utils.AdsddlLogger;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The SECURITY_DESCRIPTOR structure defines the security attributes of an object. These attributes specify who owns the
@@ -56,7 +55,7 @@ public class SDDL {
     /**
      * Logger.
      */
-    protected static final Logger LOG = LoggerFactory.getLogger(SDDL.class);
+    protected static final AdsddlLogger LOG = AdsddlLogger.getLogger(SDDL.class);
 
     /**
      * An unsigned 8-bit value that specifies the revision of the SECURITY_DESCRIPTOR structure.

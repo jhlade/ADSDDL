@@ -21,10 +21,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import net.tirasa.adsddl.ntsd.utils.AdsddlLogger;
 import net.tirasa.adsddl.ntsd.utils.Hex;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A security identifier (SID) uniquely identifies a security principal. Each security principal has a unique SID that
@@ -55,7 +54,7 @@ public class SID {
     /**
      * Logger.
      */
-    protected static final Logger LOG = LoggerFactory.getLogger(SID.class);
+    protected static final AdsddlLogger LOG = AdsddlLogger.getLogger(SID.class);
 
     /**
      * An 8-bit unsigned integer that specifies the revision level of the SID. This value MUST be set to 0x01.

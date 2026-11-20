@@ -27,10 +27,9 @@ import net.tirasa.adsddl.ntsd.data.AceFlag;
 import net.tirasa.adsddl.ntsd.data.AceObjectFlags;
 import net.tirasa.adsddl.ntsd.data.AceRights;
 import net.tirasa.adsddl.ntsd.data.AceType;
+import net.tirasa.adsddl.ntsd.utils.AdsddlLogger;
 import net.tirasa.adsddl.ntsd.utils.GUID;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * An access control entry (ACE) is used to encode the user rights afforded to a principal, either a user or group. This
@@ -41,7 +40,7 @@ public class ACE {
     /**
      * Logger.
      */
-    protected static final Logger LOG = LoggerFactory.getLogger(ACE.class);
+    protected static final AdsddlLogger LOG = AdsddlLogger.getLogger(ACE.class);
 
     /**
      * @see AceType

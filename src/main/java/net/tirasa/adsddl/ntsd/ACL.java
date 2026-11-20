@@ -25,9 +25,8 @@ import java.util.Objects;
 import net.tirasa.adsddl.ntsd.data.AceFlag;
 import net.tirasa.adsddl.ntsd.data.AceType;
 import net.tirasa.adsddl.ntsd.data.AclRevision;
+import net.tirasa.adsddl.ntsd.utils.AdsddlLogger;
 import net.tirasa.adsddl.ntsd.utils.NumberFacility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The access control list (ACL) packet is used to specify a list of individual access control entries (ACEs). An ACL
@@ -60,7 +59,7 @@ public class ACL {
     /**
      * Logger.
      */
-    protected static final Logger LOG = LoggerFactory.getLogger(ACL.class);
+    protected static final AdsddlLogger LOG = AdsddlLogger.getLogger(ACL.class);
 
     /**
      * An unsigned 8-bit value that specifies the revision of the ACL. The only two legitimate forms of ACLs supported
