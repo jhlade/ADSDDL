@@ -59,6 +59,8 @@ public class BasicTest {
     public void guid() {
         assertTrue(Arrays.equals(GUID.getGuidAsByteArray(SDDLHelper.UCP_OBJECT_GUID), OBJECT_GUID));
         assertEquals(SDDLHelper.UCP_OBJECT_GUID, GUID.getGuidAsString(OBJECT_GUID));
+        assertTrue(GUID.equals(OBJECT_GUID, SDDLHelper.UCP_OBJECT_GUID));
+        assertTrue(GUID.equals(OBJECT_GUID, SDDLHelper.UCP_OBJECT_GUID.toUpperCase()));
     }
 
     @Test
@@ -155,6 +157,27 @@ public class BasicTest {
         assertTrue(SDDLHelper.isUserCannotChangePassword(parsedDenied));
         assertTrue(parsedDenied.toString().contains("(OD;;CR;" + SDDLHelper.UCP_OBJECT_GUID + ";;S-1-1-0)"));
         assertTrue(parsedDenied.toString().contains("(OD;;CR;" + SDDLHelper.UCP_OBJECT_GUID + ";;S-1-5-10)"));
+
+        // Verify canonical DACL sorting (explicit deny -> explicit allow -> inherited)
+        parsedDenied.getDacl().sortCanonical();
+        boolean seenExplicitAllow = false;
+        boolean seenInherited = false;
+        for (int i = 0; i < parsedDenied.getDacl().getAceCount(); i++) {
+            var ace = parsedDenied.getDacl().getAce(i);
+            boolean isInherited = ace.getFlags().contains(net.tirasa.adsddl.ntsd.data.AceFlag.INHERITED_ACE);
+            if (isInherited) {
+                seenInherited = true;
+            } else {
+                assertTrue(!seenInherited);
+                boolean isAllow = ace.getType() == net.tirasa.adsddl.ntsd.data.AceType.ACCESS_ALLOWED_ACE_TYPE
+                        || ace.getType() == net.tirasa.adsddl.ntsd.data.AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE;
+                if (isAllow) {
+                    seenExplicitAllow = true;
+                } else {
+                    assertTrue(!seenExplicitAllow);
+                }
+            }
+        }
     }
 
     @Test
