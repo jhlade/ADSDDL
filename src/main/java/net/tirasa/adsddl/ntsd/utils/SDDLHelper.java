@@ -20,6 +20,7 @@ import java.util.List;
 import net.tirasa.adsddl.ntsd.ACE;
 import net.tirasa.adsddl.ntsd.SDDL;
 import net.tirasa.adsddl.ntsd.SID;
+import net.tirasa.adsddl.ntsd.data.AceFlag;
 import net.tirasa.adsddl.ntsd.data.AceObjectFlags;
 import net.tirasa.adsddl.ntsd.data.AceRights;
 import net.tirasa.adsddl.ntsd.data.AceType;
@@ -35,13 +36,27 @@ public class SDDLHelper {
      */
     public static final String UCP_OBJECT_GUID = "ab721a53-1e2f-11d0-9819-00aa0040529b";
 
+    private static final byte[] UCP_OBJECT_GUID_BYTES = GUID.getGuidAsByteArray(UCP_OBJECT_GUID);
+
+    private static final byte[] EVERYONE_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+
+    private static final byte[] EVERYONE_SUB_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x00 };
+
+    private static final byte[] SELF_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 };
+
+    private static final byte[] SELF_SUB_AUTHORITY = new byte[] { 0x00, 0x00, 0x00, 0x0a };
+
     /**
-     * Check if user canot change password.
+     * Check if user cannot change password.
      *
-     * @param sddl SSDL.
-     * @return <tt>true</tt> if user cannot change password: <tt>false</tt> otherwise.
+     * @param sddl SDDL.
+     * @return <tt>true</tt> if user cannot change password; <tt>false</tt> otherwise.
      */
     public static boolean isUserCannotChangePassword(final SDDL sddl) {
+        if (sddl == null || sddl.getDacl() == null) {
+            return false;
+        }
+
         boolean res = false;
 
         final List<ACE> aces = sddl.getDacl().getAces();
@@ -49,22 +64,13 @@ public class SDDLHelper {
             final ACE ace = aces.get(i);
 
             if (ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE
-                    && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)) {
-                if (GUID.getGuidAsString(ace.getObjectType()).equals(UCP_OBJECT_GUID)) {
+                    && ace.getObjectFlags() != null
+                    && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)
+                    && Arrays.equals(ace.getObjectType(), UCP_OBJECT_GUID_BYTES)) {
 
-                    final SID sid = ace.getSid();
-                    if (sid.getSubAuthorities().size() == 1) {
-                        if ((Arrays.equals(
-                                sid.getIdentifierAuthority(), new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 })
-                                && Arrays.equals(
-                                        sid.getSubAuthorities().get(0), new byte[] { 0x00, 0x00, 0x00, 0x00 }))
-                                || (Arrays.equals(
-                                        sid.getIdentifierAuthority(), new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 })
-                                && Arrays.equals(
-                                        sid.getSubAuthorities().get(0), new byte[] { 0x00, 0x00, 0x00, 0x0a }))) {
-                            res = true;
-                        }
-                    }
+                final SID sid = ace.getSid();
+                if (isEveryoneSid(sid) || isSelfSid(sid)) {
+                    res = true;
                 }
             }
         }
@@ -80,63 +86,101 @@ public class SDDLHelper {
      * @return updated SDDL.
      */
     public static SDDL userCannotChangePassword(final SDDL sddl, final Boolean cannot) {
-        final AceType type = cannot ? AceType.ACCESS_DENIED_OBJECT_ACE_TYPE : AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE;
+        if (sddl == null || sddl.getDacl() == null) {
+            return sddl;
+        }
 
+        final boolean deny = Boolean.TRUE.equals(cannot);
+        final AceType type = deny ? AceType.ACCESS_DENIED_OBJECT_ACE_TYPE : AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE;
+
+        ACE everyone = null;
         ACE self = null;
-        ACE all = null;
 
         final List<ACE> aces = sddl.getDacl().getAces();
-        for (int i = 0; (all == null || self == null) && i < aces.size(); i++) {
+        for (int i = 0; (everyone == null || self == null) && i < aces.size(); i++) {
             final ACE ace = aces.get(i);
 
             if ((ace.getType() == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE
                     || ace.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE)
-                    && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)) {
-                if (GUID.getGuidAsString(ace.getObjectType()).equals(UCP_OBJECT_GUID)) {
+                    && ace.getObjectFlags() != null
+                    && ace.getObjectFlags().getFlags().contains(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT)
+                    && Arrays.equals(ace.getObjectType(), UCP_OBJECT_GUID_BYTES)) {
 
-                    final SID sid = ace.getSid();
-                    if (sid.getSubAuthorities().size() == 1) {
-                        if (self == null && Arrays.equals(
-                                sid.getIdentifierAuthority(), new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 })
-                                && Arrays.equals(
-                                        sid.getSubAuthorities().get(0), new byte[] { 0x00, 0x00, 0x00, 0x00 })) {
-                            self = ace;
-                            self.setType(type);
-                        } else if (all == null && Arrays.equals(
-                                sid.getIdentifierAuthority(), new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 })
-                                && Arrays.equals(
-                                        sid.getSubAuthorities().get(0), new byte[] { 0x00, 0x00, 0x00, 0x0a })) {
-                            all = ace;
-                            all.setType(type);
-                        }
-                    }
+                final SID sid = ace.getSid();
+                if (everyone == null && isEveryoneSid(sid)) {
+                    everyone = ace;
+                } else if (self == null && isSelfSid(sid)) {
+                    self = ace;
                 }
             }
         }
 
-        if (self == null) {
-            // prepare aces
-            self = ACE.newInstance(type);
-            self.setObjectFlags(new AceObjectFlags(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT));
-            self.setObjectType(GUID.getGuidAsByteArray(UCP_OBJECT_GUID));
-            self.setRights(new AceRights().addOjectRight(AceRights.ObjectRight.CR));
-            SID sid = SID.newInstance(NumberFacility.getBytes(0x000000000001, 6));
-            sid.addSubAuthority(NumberFacility.getBytes(0));
-            self.setSid(sid);
-            sddl.getDacl().getAces().add(self);
+        if (everyone != null) {
+            aces.remove(everyone);
+            everyone.setType(type);
+        } else {
+            everyone = createUcpAce(type, EVERYONE_AUTHORITY, EVERYONE_SUB_AUTHORITY);
         }
 
-        if (all == null) {
-            all = ACE.newInstance(type);
-            all.setObjectFlags(new AceObjectFlags(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT));
-            all.setObjectType(GUID.getGuidAsByteArray(UCP_OBJECT_GUID));
-            all.setRights(new AceRights().addOjectRight(AceRights.ObjectRight.CR));
-            final SID sid = SID.newInstance(NumberFacility.getBytes(0x000000000005, 6));
-            sid.addSubAuthority(NumberFacility.getBytes(0x0A));
-            all.setSid(sid);
-            sddl.getDacl().getAces().add(all);
+        if (self != null) {
+            aces.remove(self);
+            self.setType(type);
+        } else {
+            self = createUcpAce(type, SELF_AUTHORITY, SELF_SUB_AUTHORITY);
         }
+
+        insertCanonical(aces, everyone);
+        insertCanonical(aces, self);
 
         return sddl;
+    }
+
+    private static boolean isEveryoneSid(final SID sid) {
+        return sid != null
+                && sid.getSubAuthorityCount() == 1
+                && Arrays.equals(sid.getIdentifierAuthority(), EVERYONE_AUTHORITY)
+                && Arrays.equals(sid.getSubAuthorities().get(0), EVERYONE_SUB_AUTHORITY);
+    }
+
+    private static boolean isSelfSid(final SID sid) {
+        return sid != null
+                && sid.getSubAuthorityCount() == 1
+                && Arrays.equals(sid.getIdentifierAuthority(), SELF_AUTHORITY)
+                && Arrays.equals(sid.getSubAuthorities().get(0), SELF_SUB_AUTHORITY);
+    }
+
+    private static ACE createUcpAce(final AceType type, final byte[] authority, final byte[] subAuthority) {
+        final ACE ace = ACE.newInstance(type);
+        ace.setObjectFlags(new AceObjectFlags(AceObjectFlags.Flag.ACE_OBJECT_TYPE_PRESENT));
+        ace.setObjectType(UCP_OBJECT_GUID_BYTES);
+        ace.setRights(new AceRights().addOjectRight(AceRights.ObjectRight.CR));
+        final SID sid = SID.newInstance(authority);
+        sid.addSubAuthority(subAuthority);
+        ace.setSid(sid);
+        return ace;
+    }
+
+    private static void insertCanonical(final List<ACE> aces, final ACE aceToInsert) {
+        final boolean isDeny = aceToInsert.getType() == AceType.ACCESS_DENIED_ACE_TYPE
+                || aceToInsert.getType() == AceType.ACCESS_DENIED_OBJECT_ACE_TYPE;
+
+        int insertIndex = aces.size();
+        for (int i = 0; i < aces.size(); i++) {
+            final ACE current = aces.get(i);
+            final boolean isInherited = current.getFlags().contains(AceFlag.INHERITED_ACE);
+            if (isInherited) {
+                insertIndex = i;
+                break;
+            }
+            if (isDeny) {
+                final boolean currentIsAllow = current.getType() == AceType.ACCESS_ALLOWED_ACE_TYPE
+                        || current.getType() == AceType.ACCESS_ALLOWED_OBJECT_ACE_TYPE;
+                if (currentIsAllow) {
+                    insertIndex = i;
+                    break;
+                }
+            }
+        }
+        aces.add(insertIndex, aceToInsert);
     }
 }
